@@ -1,32 +1,33 @@
 export default class Pieces {
-	constructor(totalPieces) {
+    constructor(totalPieces) {
         this.requested = new Set();
         this.received = new Set();
         this.total = totalPieces;
     }
 
-    // create an array of requested and received pieces
-    need(pieceIndex) {
+    // Returns true if this piece hasn't been requested or received yet
+    needed(pieceIndex) {
         return !this.requested.has(pieceIndex) && !this.received.has(pieceIndex);
     }
 
-    // add requested pieces
+    // Mark a piece as requested
     addRequested(pieceIndex) {
         this.requested.add(pieceIndex);
     }
-    // add received pieces
+
+    // Mark a piece as received (and remove from requested)
     addReceived(pieceIndex) {
         this.received.add(pieceIndex);
         this.requested.delete(pieceIndex);
     }
 
-    // get remaining pieces
+    // How many pieces remain
     get remaining() {
         return this.total - this.received.size;
     }
 
-    // check if all pieces are received
+    // Fixed: Set has no .every(); compare sizes instead
     isDone() {
-        return this.received.every(i => i === true);
+        return this.received.size === this.total;
     }
 }

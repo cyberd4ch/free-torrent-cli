@@ -1,9 +1,10 @@
 import crypto from 'crypto';
 
-const id = null;
+// `let` so the variable can be assigned after declaration
+let id = null;
 
 export function generatePeerId() {
-    if(!id) {
+    if (!id) {
         id = crypto.randomBytes(20);
         Buffer.from('-TR2930-').copy(id, 0);
     }
