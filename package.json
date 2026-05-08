@@ -1,22 +1,79 @@
 {
   "name": "free-torrent-cli",
-  "version": "1.0.0",
+  "version": "2.0.0",
+  "description": "A lightweight BitTorrent client with CLI and GUI (Electron)",
   "type": "module",
-  "description": "Simple command line torrent client for free torrent sites built with Node.js",
+  "main": "electron/main.js",
   "bin": {
     "free-torrent-cli": "./index.js"
   },
-  "main": "index.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --inspect",
+    "cli": "node index.js",
+    "test": "node tests/run.js",
+    "build": "electron-builder --mac",
+    "build:win": "electron-builder --win",
+    "build:linux": "electron-builder --linux"
+  },
   "dependencies": {
     "bencode": "^4.0.0",
     "chalk": "^5.3.0",
     "cli-progress": "^3.12.0",
     "url-parse": "^1.5.10"
   },
-  "scripts": {
-    "test": "node tests/run.js"
+  "devDependencies": {
+    "electron": "^41.5.0",
+    "electron-builder": "^26.8.1"
   },
-  "keywords": [],
+  "build": {
+    "appId": "com.cyberd4ch.free-torrent-cli",
+    "productName": "free-torrent-cli",
+    "asar": true,
+    "files": [
+      "electron/**/*",
+      "renderer/**/*",
+      "src/**/*",
+      "index.js",
+      "package.json"
+    ],
+    "mac": {
+      "category": "public.app-category.utilities",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        }
+      ]
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "category": "Network"
+    }
+  },
+  "keywords": [
+    "torrent",
+    "bittorrent",
+    "cli",
+    "electron",
+    "downloader"
+  ],
   "author": "dach-a",
   "license": "MIT",
   "bugs": {

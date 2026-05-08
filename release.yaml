@@ -1,0 +1,119 @@
+name: Build & Release
+ 
+on:
+  push:
+    tags:
+      - 'v*'   # triggers on v1.0.0, v2.0.0, etc.
+ 
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: macos-latest
+            platform: mac
+          - os: windows-latest
+            platform: win
+          - os: ubuntu-latest
+            platform: linux
+ 
+    runs-on: ${{ matrix.os }}
+ 
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+ 
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+ 
+      - name: Install dependencies
+        run: npm ci
+ 
+      - name: Build Electron app (${{ matrix.platform }})
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npm run build:${{ matrix.platform }}
+ 
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: FreeTorrent-${{ matrix.platform }}
+          path: |
+            dist/*.dmg
+            dist/*.zip
+            dist/*.exe
+            dist/*.AppImage
+            dist/*.deb
+            dist/*.rpm
+          if-no-files-found: ignore
+ 
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+ 
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist-all
+          merge-multiple: true
+ 
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: FreeTorrent ${{ github.ref_name }}
+          body: |
+            ## FreeTorrent ${{ github.ref_name }}
+ 
+            ### Download
+            | Platform | File |
+            |---|---|
+            | 🍎 macOS (Apple Silicon) | `FreeTorrent-*-arm64.dmg` |
+            | 🍎 macOS (Intel) | `FreeTorrent-*-x64.dmg` |
+            | 🪟 Windows | `FreeTorrent-*-Setup.exe` |
+            | 🐧 Linux | `FreeTorrent-*.AppImage` |
+ 
+            ### Install
+            - **macOS**: Open the `.dmg`, drag FreeTorrent to Applications
+            - **Windows**: Run the `.exe` installer
+            - **Linux**: `chmod +x FreeTorrent-*.AppImage && ./FreeTorrent-*.AppImage`
+ 
+            See [CHANGELOG](https://github.com/cyberd4ch/free-torrent-cli/blob/main/CHANGELOG.md) for what's new.
+          files: dist-all/**/*
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+ 
+  deploy-pages:
+    needs: release
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+ 
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+ 
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+ 
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+ 
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs/
+ 
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+ 
