@@ -793,6 +793,7 @@ test('bencodePrefixEnd finds value boundaries', () => {
 });
 
 await testA('fetchMetadata end-to-end against a fake seeder over TCP', async () => {
+    process.env.FTC_DEBUG_MDX = '1'; // full wire-dance trace on CI
     const info = {
         name: Buffer.from('x'),
         length: 4,

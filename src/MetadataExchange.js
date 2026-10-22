@@ -26,6 +26,14 @@ const MSG_TYPE_DATA = 1;
 const MSG_TYPE_REJECT = 2;
 const METADATA_BLOCK = 16384; // 16 KiB, fixed by BEP 9
 
+// Set FTC_DEBUG_MDX=1 to see the full wire dance (used when debugging CI).
+// Read at call time so tests can enable it after this module has loaded.
+function dbg(...args) {
+    if (process.env.FTC_DEBUG_MDX === '1') {
+        console.error('[mdx]', new Date().toISOString().slice(11, 19), ...args);
+    }
+}
+
 // ── minimal bencode prefix decoder ─────────────────────────────────────────
 // The ut_metadata data response is `bencode(dict) + raw bytes` in one
 // message, so on top of bencode.decode() we need to know where the dict
@@ -222,7 +230,9 @@ function connectMetadataPeer({ ip, port }, infoHash, ctx) {
     const pieces = {};   // index → Buffer
     let doneFired = false;
 
-    function onDone() {
+    function onDone(why = 'unknown') {
+        dbg('onDone:', why, 'phase=' + phase, 'theirUtId=' + theirUtId,
+            'numPieces=' + numPieces, 'piecesRecv=' + Object.keys(pieces).length);
         if (doneFired) return;
         doneFired = true;
         try { socket.destroy(); } catch (_) {}
@@ -230,15 +240,16 @@ function connectMetadataPeer({ ip, port }, infoHash, ctx) {
     }
 
     socket.setTimeout(15000);
-    socket.on('timeout', onDone);
-    socket.on('error', onDone);
-    socket.on('close', onDone);
+    socket.on('timeout', () => onDone('idle-timeout'));
+    socket.on('error', err => onDone('error: ' + err.message));
+    socket.on('close', () => onDone('close'));
 
     socket.connect(port, ip, () => {
         socket.write(buildExtendedHandshakeBytes(infoHash));
     });
 
     socket.on('data', (data) => {
+        dbg('<<', data.length, 'bytes, phase=' + phase);
         buffer = Buffer.concat([buffer, data]);
         drain();
     });
@@ -268,7 +279,10 @@ function connectMetadataPeer({ ip, port }, infoHash, ctx) {
                 const m = parsed.dict?.m;
                 theirUtId = m?.ut_metadata;
                 const metaSize = parsed.dict?.metadata_size;
-                if (!m?.ut_metadata || !metaSize) { onDone(); return; }
+                if (!m?.ut_metadata || !metaSize) {
+                    dbg('peer e-handshake missing ut_metadata/metadata_size');
+                    onDone(); return;
+                }
                 numPieces = Math.ceil(metaSize / METADATA_BLOCK);
                 phase = 'fetching';
                 for (let i = 0; i < numPieces; i++) {
@@ -280,7 +294,11 @@ function connectMetadataPeer({ ip, port }, infoHash, ctx) {
 
             if (phase === 'fetching') {
                 const parsed = parseExtendedMessage(msg);
-                if (parsed.extendedId !== theirUtId || !parsed.dict || dictMsgType(parsed.dict) !== MSG_TYPE_DATA || !parsed.data) return;
+                if (parsed.extendedId !== theirUtId || !parsed.dict || dictMsgType(parsed.dict) !== MSG_TYPE_DATA || !parsed.data) {
+                    dbg('unexpected msg while fetching: extId=' + parsed.extendedId,
+                        'type=' + (parsed.dict && dictMsgType(parsed.dict)), 'dataLen=' + (parsed.data && parsed.data.length));
+                    return;
+                }
 
                 pieces[parsed.dict.piece] = Buffer.from(parsed.data);
                 ctx.onProgress(Object.keys(pieces).length);
