@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>FreeTorrent — headless</title>
+<style>
+    :root {
+        --bg: #0a0a0f;
+        --panel: #13131b;
+        --border: #23232f;
+        --text: #e4e4ef;
+        --muted: #8a8aa0;
+        --accent: #6c8cff;
+        --green: #3dd68c;
+        --red: #ff5f66;
+        --amber: #ffbf5c;
+    }
+    * { box-sizing: border-box; }
+    body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font: 14px/1.5 ui-sans-serif, -apple-system, "Segoe UI", sans-serif;
+    }
+    header {
+        display: flex; align-items: center; gap: 12px;
+        padding: 16px 24px; border-bottom: 1px solid var(--border);
+    }
+    header h1 { font-size: 16px; margin: 0; letter-spacing: .3px; }
+    header .dot {
+        width: 9px; height: 9px; border-radius: 50%;
+        background: var(--red); transition: background .3s;
+    }
+    header .dot.live { background: var(--green); }
+    main { max-width: 880px; margin: 0 auto; padding: 24px; }
+
+    .card {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 16px 18px;
+        margin-bottom: 16px;
+    }
+
+    .add-form { display: flex; flex-direction: column; gap: 10px; }
+    .add-form label { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .5px; }
+    .add-form input {
+        background: #0d0d14; border: 1px solid var(--border); color: var(--text);
+        border-radius: 8px; padding: 10px 12px; font-size: 14px; width: 100%;
+    }
+    .add-form input:focus { outline: none; border-color: var(--accent); }
+    .add-form button {
+        align-self: flex-start;
+        background: var(--accent); color: #0a0a0f; border: none;
+        font-weight: 600; padding: 10px 22px; border-radius: 8px; cursor: pointer;
+    }
+    .add-form button:hover { filter: brightness(1.1); }
+
+    .list { display: flex; flex-direction: column; gap: 12px; }
+    .empty { color: var(--muted); text-align: center; padding: 40px 0; }
+
+    .torrent { padding: 14px 16px; }
+    .t-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+    .t-name { font-weight: 600; word-break: break-all; }
+    .t-meta { color: var(--muted); font-size: 12px; margin-top: 2px; }
+    .t-remove {
+        background: none; border: 1px solid var(--border); color: var(--red);
+        border-radius: 8px; padding: 6px 12px; cursor: pointer; font-size: 12px;
+    }
+    .t-remove:hover { border-color: var(--red); }
+    .bar {
+        height: 8px; background: #0d0d14; border-radius: 99px;
+        margin: 10px 0 8px; overflow: hidden;
+    }
+    .bar > div { height: 100%; width: 0; background: var(--accent); border-radius: 99px; transition: width .4s; }
+    .status-seeding .bar > div { background: var(--green); }
+    .status-error .bar > div { background: var(--red); }
+    .t-stats { display: flex; flex-wrap: wrap; gap: 8px 18px; color: var(--muted); font-size: 12px; }
+    .t-stats b { color: var(--text); font-weight: 500; }
+    .t-error { color: var(--red); font-size: 12px; margin-top: 6px; }
+    #log {
+        font: 11px/1.6 ui-monospace, monospace; color: var(--muted);
+        max-height: 140px; overflow: auto; white-space: pre-wrap;
+    }
+</style>
+</head>
+<body>
+<header>
+    <div class="dot" id="connDot"></div>
+    <h1>🌀 FreeTorrent — headless</h1>
+</header>
+<main>
+    <div class="card">
+        <form class="add-form" id="addForm">
+            <div>
+                <label for="inpTorrent">Magnet link or path to a .torrent file (on the server)</label>
+                <input id="inpTorrent" type="text"
+                       placeholder="magnet:?xt=urn:btih:…  or  /home/me/kali.torrent" required />
+            </div>
+            <div>
+                <label for="inpDir">Output directory (optional)</label>
+                <input id="inpDir" type="text" placeholder="e.g. /home/me/Downloads" />
+            </div>
+            <button type="submit">Add torrent</button>
+        </form>
+    </div>
+
+    <div class="card list" id="list"><div class="empty">No torrents yet — add one above.</div></div>
+
+    <div class="card">
+        <label style="color:var(--muted);font-size:12px;text-transform:uppercase">Server log</label>
+        <div id="log"></div>
+    </div>
+</main>
+<script src="/app.js"></script>
+</body>
+</html>

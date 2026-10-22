@@ -4,7 +4,12 @@
  */
 
 import crypto from 'crypto';
+import path from 'path';
 import { Buffer } from 'buffer';
+
+function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
 
 // ── tiny test harness ──────────────────────────────────────────────────────
 let passed = 0, failed = 0;
@@ -27,6 +32,19 @@ function assert(cond, msg) {
 
 function assertEqual(a, b, msg) {
     if (a !== b) throw new Error(msg || `Expected ${b}, got ${a}`);
+}
+
+// Async tests: await at their call site (top-level await is fine here).
+async function testA(name, fn) {
+    try {
+        await fn();
+        console.log(`  ✅  ${name}`);
+        passed++;
+    } catch (e) {
+        console.error(`  ❌  ${name}`);
+        console.error(`      ${e.message}`);
+        failed++;
+    }
 }
 
 // ── imports ────────────────────────────────────────────────────────────────
@@ -534,6 +552,405 @@ test('Seeder: buildBitfield marks received pieces correctly', () => {
     // piece 1 → bit 6 of byte 0
     assertEqual(bf[0] & 0x40, 0, 'piece 1 should not be set');
     fm.close();
+});
+
+// ══════════════════════════════════════════════════════════════════════════
+// 8. Magnet.js
+// ══════════════════════════════════════════════════════════════════════════
+console.log('\n── Magnet.js ────────────────────────────────────────────────');
+
+import { parseMagnet } from '../src/Magnet.js';
+
+const HEX_40 = 'a'.repeat(40);
+
+function base32Encode(buf) {
+    const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+    let bits = 0, value = 0;
+    let out = '';
+    for (const byte of buf) {
+        value = (value << 8) | byte;
+        bits += 8;
+        while (bits >= 5) {
+            out += alphabet[(value >>> (bits - 5)) & 31];
+            bits -= 5;
+        }
+    }
+    if (bits > 0) out += alphabet[(value << (5 - bits)) & 31];
+    return out;
+}
+
+test('parseMagnet: hex info hash, display name, and tracker URLs', () => {
+    const m = parseMagnet(
+        'magnet:?xt=urn:btih:' + HEX_40 +
+        '&dn=hello%20world' +
+        '&tr=udp%3A%2F%2Ftracker.example.com%3A6881' +
+        '&tr=udp%3A%2F%2Fb.example.org%3A1234'
+    );
+    assert(m.infoHash.equals(Buffer.from(HEX_40, 'hex')), 'info hash mismatch');
+    assertEqual(m.infoHash.length, 20, 'info hash must be 20 bytes');
+    assertEqual(m.displayName, 'hello world', 'display name not decoded');
+    assertEqual(m.trackers.length, 2, 'should collect two trackers');
+    assertEqual(m.trackers[0], 'udp://tracker.example.com:6881', 'first tracker wrong');
+});
+
+test('parseMagnet: base32 info hash decodes back to 20 bytes', () => {
+    const raw = crypto.randomBytes(20);
+    const b32 = base32Encode(raw);
+    assertEqual(b32.length, 32, 'padding-free base32 of 20 bytes must be 32 chars');
+    const m = parseMagnet('magnet:?xt=urn:btih:' + b32);
+    assert(m.infoHash.equals(raw), 'base32 round trip failed');
+});
+
+test('parseMagnet: tr parameters may repeat, dn may be absent', () => {
+    const m = parseMagnet('magnet:?xt=urn:btih:' + HEX_40 + '&tr=' + encodeURIComponent('http://x/y'));
+    assertEqual(m.trackers.length, 1, 'should have one tracker');
+    assertEqual(m.displayName, null, 'no dn means null');
+});
+
+test('parseMagnet: rejects non-magnet uris', () => {
+    let threw = false;
+    try { parseMagnet('http://example.com/thing'); } catch (_) { threw = true; }
+    assert(threw, 'should throw for non-magnet input');
+});
+
+test('parseMagnet: rejects magnet without xt=urn:btih:', () => {
+    let threw = false;
+    try { parseMagnet('magnet:?dn=nothing'); } catch (_) { threw = true; }
+    assert(threw, 'should throw without xt');
+});
+
+test('parseMagnet: rejects hash strings of the wrong length', () => {
+    let threw = false;
+    try { parseMagnet('magnet:?xt=urn:btih:abcd'); } catch (_) { threw = true; }
+    assert(threw, 'should throw for a 4-char hash');
+});
+
+// ══════════════════════════════════════════════════════════════════════════
+// 9. DHT.js — builders/parsers + live localhost integration
+// ══════════════════════════════════════════════════════════════════════════
+console.log('\n── DHT.js ───────────────────────────────────────────────────');
+
+import DHTNode, {
+    buildPingQuery, buildGetPeersQuery, buildAnnouncePeerQuery,
+    parseDhtMessage, parseCompactPeers, parseCompactNodes,
+    compactNode, compactPeer, xorDistance, isCloser,
+} from '../src/DHT.js';
+
+test('buildPingQuery round-trips through the decoder', () => {
+    const msg = parseDhtMessage(buildPingQuery(Buffer.alloc(20, 7)));
+    assertEqual(msg.y, 'q', 'wrong type');
+    assertEqual(msg.q, 'ping', 'wrong query');
+    assert(Buffer.isBuffer(msg.a.id), 'id should be a Buffer');
+    assertEqual(msg.a.id.length, 20, 'id wrong length');
+});
+
+test('buildGetPeersQuery carries the info_hash', () => {
+    const ih = crypto.randomBytes(20);
+    const msg = parseDhtMessage(buildGetPeersQuery(Buffer.alloc(20), ih));
+    assertEqual(msg.q, 'get_peers', 'wrong query');
+    assert(msg.a.info_hash.equals(ih), 'info hash mismatch');
+});
+
+test('buildAnnouncePeerQuery carries port and token', () => {
+    const ih = crypto.randomBytes(20);
+    const token = crypto.randomBytes(8);
+    const msg = parseDhtMessage(buildAnnouncePeerQuery(Buffer.alloc(20), ih, 6881, token));
+    assertEqual(msg.q, 'announce_peer', 'wrong query');
+    assertEqual(msg.a.port, 6881, 'wrong port');
+    assert(msg.a.token.equals(token), 'token mismatch');
+});
+
+test('compactPeer / parseCompactPeers round-trip', () => {
+    const peer = { ip: '10.1.2.3', port: 51413 };
+    const parsed = parseCompactPeers(compactPeer(peer));
+    assertEqual(parsed.length, 1, 'should parse one peer');
+    assertEqual(parsed[0].ip, peer.ip, 'ip mismatch');
+    assertEqual(parsed[0].port, peer.port, 'port mismatch');
+});
+
+test('compactNode / parseCompactNodes round-trip', () => {
+    const node = { ip: '192.168.0.9', port: 9001, id: crypto.randomBytes(20) };
+    const parsed = parseCompactNodes(compactNode(node));
+    assertEqual(parsed.length, 1, 'should parse one node');
+    assertEqual(parsed[0].ip, node.ip, 'ip mismatch');
+    assertEqual(parsed[0].port, node.port, 'port mismatch');
+    assert(parsed[0].id.equals(node.id), 'id mismatch');
+});
+
+test('xorDistance + isCloser order nodes by XOR distance', () => {
+    const target = Buffer.alloc(20);            // all-zero target
+    const closer = Buffer.alloc(20);            // zero → distance zero
+    const farther = Buffer.alloc(20);
+    farther[19] = 0x01;
+    assert(Buffer.isBuffer(xorDistance(closer, target)));
+    assert(isCloser(closer, farther, target), 'closer should not be farther');
+    assert(!isCloser(farther, closer, target), 'farther should not be closer');
+});
+
+await testA('DHT live integration: A announces, C discovers B through A', async () => {
+    const infoHash = crypto.randomBytes(20);
+    const key = infoHash.toString('hex');
+
+    const nodeA = new DHTNode({ port: 0, bootstrap: [] });
+    const nodeB = new DHTNode({ port: 0, bootstrap: [] });
+    const nodeC = new DHTNode({ port: 0, bootstrap: [] });
+
+    await nodeA.start();
+    await nodeB.start();
+    await nodeC.start();
+
+    try {
+        // Seed B and C routing tables with A directly (offline bootstrap)
+        for (const node of [nodeB, nodeC]) {
+            node.table.set(`127.0.0.1:${nodeA.port}`, {
+                id: crypto.randomBytes(20), ip: '127.0.0.1', port: nodeA.port,
+                token: null, lastSeen: Date.now(),
+            });
+        }
+
+        // B announces itself for infoHash via A
+        const bResult = await nodeB.getPeers(infoHash, {
+            timeoutMs: 5000, announcePort: nodeB.port,
+        });
+        assertEqual(bResult.announced, true, 'B should have announced');
+        assertEqual(bResult.peers.length, 0, 'B should find nobody yet');
+
+        const swarm = nodeA.swarms.get(key);
+        assert(swarm && swarm.size === 1, 'A should track B in the swarm');
+
+        // C bootstraps to A and discovers B
+        const cResult = await nodeC.getPeers(infoHash, {
+            timeoutMs: 5000, announcePort: nodeC.port,
+        });
+        assert(cResult.peers.some(p => p.ip === '127.0.0.1' && p.port === nodeB.port),
+            `C should discover B (got ${JSON.stringify(cResult.peers)})`);
+        assertEqual(nodeA.swarms.get(key).size, 2, 'A should now track both B and C');
+    } finally {
+        nodeA.close(); nodeB.close(); nodeC.close();
+    }
+});
+
+// ══════════════════════════════════════════════════════════════════════════
+// 10. MetadataExchange.js — builders plus a fake seeder over TCP
+// ══════════════════════════════════════════════════════════════════════════
+console.log('\n── MetadataExchange.js ──────────────────────────────────────');
+
+import {
+    buildExtendedHandshakeBytes, buildExtendedMessage,
+    buildExtendedHandshakeDict, buildMetadataRequest,
+    buildMetadataResponse, buildMetadataReject, parseExtendedMessage,
+    bencodePrefixEnd, fetchMetadata,
+} from '../src/MetadataExchange.js';
+import bencode from 'bencode';
+import net from 'net';
+
+test('buildExtendedHandshakeBytes sets the BEP 10 reserved bit', () => {
+    const hs = buildExtendedHandshakeBytes(crypto.randomBytes(20), crypto.randomBytes(20));
+    assertEqual(hs.length, 68, 'handshake must be 68 bytes');
+    assertEqual(hs.toString('utf8', 1, 20), 'BitTorrent protocol', 'wrong pstr');
+    assert((hs[25] & 0x10) === 0x10, 'extension bit not set in reserved byte 5');
+});
+
+test('buildExtendedMessage frames correctly', () => {
+    const payload = bencode.encode({ msg_type: 0, piece: 3 });
+    const msg = buildExtendedMessage(5, payload);
+    assertEqual(msg.readUInt32BE(0), 2 + payload.length, 'wrong length prefix');
+    assertEqual(msg.readUInt8(4), 20, 'id should be 20 (extended)');
+    assertEqual(msg.readUInt8(5), 5, 'wrong extended id');
+});
+
+test('buildExtendedHandshakeDict advertises ut_metadata', () => {
+    const msg = buildExtendedHandshakeDict(1, 6881);
+    const parsed = parseExtendedMessage(msg);
+    assertEqual(parsed.id, 20, 'should be an extended message');
+    assertEqual(parsed.extendedId, 0, 'extended handshake id must be 0');
+    assertEqual(parsed.dict.m.ut_metadata, 1, 'should advertise ut_metadata id 1');
+    assertEqual(parsed.dict.p, 6881, 'should include our port');
+});
+
+test('buildMetadataResponse parses back into dict plus raw data', () => {
+    const data = crypto.randomBytes(100);
+    const msg = buildMetadataResponse(2, 1, 262144, data);
+    const parsed = parseExtendedMessage(msg);
+    assertEqual(parsed.extendedId, 2, 'extended id mismatch');
+    assertEqual(parsed.dict.msg_type, 1, 'msg_type should be DATA');
+    assertEqual(parsed.dict.piece, 1, 'piece mismatch');
+    assertEqual(parsed.dict.total_size, 262144, 'total_size mismatch');
+    assert(parsed.data.equals(data), 'data payload mismatch');
+});
+
+test('buildMetadataReject parses as a reject message', () => {
+    const parsed = parseExtendedMessage(buildMetadataReject(2, 3));
+    assertEqual(parsed.dict.msg_type, 2, 'msg_type should be REJECT');
+    assertEqual(parsed.dict.piece, 3, 'piece mismatch');
+});
+
+test('bencodePrefixEnd finds value boundaries', () => {
+    const enc = Buffer.from(bencode.encode({ msg_type: 0, piece: 5 }));
+    assertEqual(bencodePrefixEnd(enc, 0), enc.length, 'dict end wrong');
+    assertEqual(bencodePrefixEnd(Buffer.from('5:hello'), 0), 7, 'string end wrong');
+    assertEqual(bencodePrefixEnd(Buffer.from('i40e'), 0), 4, 'integer end wrong');
+});
+
+await testA('fetchMetadata end-to-end against a fake seeder over TCP', async () => {
+    const info = {
+        name: Buffer.from('x'),
+        length: 4,
+        'piece length': 4,
+        pieces: crypto.randomBytes(20),
+    };
+    const encoded = bencode.encode(info);
+    const infoHash = crypto.createHash('sha1').update(encoded).digest();
+    const metaSize = encoded.length;
+    const blockSize = 16384;
+
+    const server = net.createServer((sock) => {
+        let buf = Buffer.alloc(0);
+
+        sock.on('data', (data) => {
+            buf = Buffer.concat([buf, data]);
+            if (buf.length < 68) {
+                return; // still waiting for our handshake
+            }
+            if (buf.toString('utf8', 1, 20) === 'BitTorrent protocol' && !sentHello) {
+                sentHello = true;
+                buf = buf.subarray(68);
+                sock.write(buildExtendedHandshakeBytes(infoHash, crypto.randomBytes(20)));
+                sock.write(buildExtendedMessage(0, bencode.encode({
+                    m: { ut_metadata: 2 },
+                    p: 6881,
+                    v: 'fake-seeder',
+                    metadata_size: metaSize,
+                })));
+            }
+            drain();
+        });
+        let sentHello = false;
+
+        function drain() {
+            while (buf.length >= 4) {
+                const len = buf.readUInt32BE(0) + 4;
+                if (len <= 4 || buf.length < len) return;
+                const msg = buf.subarray(0, len);
+                buf = buf.subarray(len);
+                const parsed = parseExtendedMessage(msg);
+                if (parsed.extendedId === 2 && parsed.dict?.msg_type === 0) {
+                    const pieceIndex = parsed.dict.piece;
+                    const data = encoded.subarray(
+                        pieceIndex * blockSize,
+                        Math.min((pieceIndex + 1) * blockSize, metaSize)
+                    );
+                    sock.write(buildMetadataResponse(2, pieceIndex, metaSize, data));
+                }
+            }
+        }
+    });
+
+    const port = await new Promise((resolve) =>
+        server.listen(0, '127.0.0.1', () => resolve(server.address().port)));
+
+    try {
+        const result = await fetchMetadata({
+            infoHash,
+            hosts: [{ ip: '127.0.0.1', port }],
+            timeoutMs: 10000,
+        });
+        assert(Buffer.isBuffer(result.name) && result.name.equals(info.name), 'name mismatch');
+        assertEqual(result.length, info.length, 'length mismatch');
+        assert(result.pieces.equals(info.pieces), 'pieces mismatch');
+    } finally {
+        server.close();
+    }
+});
+
+// ══════════════════════════════════════════════════════════════════════════
+// 11. server.js — web UI API end-to-end
+// ══════════════════════════════════════════════════════════════════════════
+console.log('\n── server.js (web UI) ───────────────────────────────────────');
+
+import { spawn } from 'child_process';
+
+async function httpJson(method, pathName, body) {
+    const res = await fetch(`http://127.0.0.1:${waitPort}${pathName}`, {
+        method,
+        headers: body ? { 'Content-Type': 'application/json' } : undefined,
+        body: body ? JSON.stringify(body) : undefined,
+    });
+    return res;
+}
+
+let waitPort = null;
+
+await testA('web server: dashboard, add via path, list, and remove — full API round trip', async () => {
+    // Synthetic torrent file (single tiny file, junk announce that fails fast)
+    const info = {
+        name: Buffer.from('webui-test.bin'),
+        length: 64,
+        'piece length': 64,
+        pieces: crypto.randomBytes(20),
+    };
+    const tmpTorrent = path.join(tmpDir, `fnc-webui-${Date.now()}.torrent`);
+    await (await import('fs/promises')).writeFile(tmpTorrent, bencode.encode({
+        announce: Buffer.from('udp://127.0.0.1:1'),
+        info,
+    }));
+
+    const srv = spawn(process.execPath, ['server.js', '--port', '0', '--host', '127.0.0.1'], {
+        cwd: path.join(import.meta.dirname ?? process.cwd(), '..').replace(/tests$/, ''),
+        stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    srv.stdout.setEncoding('utf8');
+    srv.stderr.setEncoding('utf8');
+    srv.stdout.on('data', d => process.stdout.write(`    [srv] ${d}`));
+    srv.stderr.on('data', d => process.stdout.write(`    [srverr] ${d}`));
+
+    // Wait for the port the server actually bound (it prints it; '0' → random)
+    waitPort = await new Promise((resolve, reject) => {
+        const timer = setTimeout(() => reject(new Error('server did not come up in 10s')), 10000);
+        srv.stdout.on('data', (d) => {
+            const m = /http:\/\/[^:]+:(\d+)/.exec(d);
+            if (m) { clearTimeout(timer); resolve(Number(m[1])); }
+        });
+    });
+
+    try {
+        // Dashboard HTML served
+        const home = await httpJson('GET', '/');
+        assertEqual(home.status, 200, 'dashboard should be 200');
+        assert((await home.text()).includes('FreeTorrent'), 'dashboard HTML wrong');
+
+        // Add the torrent via file path
+        const addRes = await httpJson('POST', '/api/add', { torrentPath: tmpTorrent });
+        assertEqual(addRes.status, 200, `add should be 200 (got ${addRes.status})`);
+        const { id } = await addRes.json();
+        assert(id, 'add should return an id');
+
+        // It should appear in the list with its real name within a couple
+        // seconds (name arrives once the .torrent file is parsed)
+        let listed = null;
+        for (let i = 0; i < 20; i++) {
+            const list = await (await httpJson('GET', '/api/torrents')).json();
+            listed = list.find(t => t.id === id && t.name === 'webui-test.bin');
+            if (listed) break;
+            await sleep(250);
+        }
+        assert(listed, 'torrent should appear in /api/torrents');
+        assertEqual(listed.name, 'webui-test.bin', 'name should come from the torrent');
+        assert(['loading', 'downloading'].includes(listed.status), `status should progress (got ${listed.status})`);
+
+        // Bad add request is rejected
+        const badRes = await httpJson('POST', '/api/add', {});
+        assertEqual(badRes.status, 400, 'add without torrentPath/magnet must be 400');
+
+        // Remove works
+        const remRes = await httpJson('POST', '/api/remove', { id });
+        assertEqual(remRes.status, 200, 'remove should be 200');
+        const after = await (await httpJson('GET', '/api/torrents')).json();
+        assert(!after.some(t => t.id === id), 'torrent should be gone after remove');
+    } finally {
+        srv.kill('SIGINT');
+        await new Promise(r => { srv.on('exit', r); setTimeout(r, 1500); });
+    }
 });
 
 // ══════════════════════════════════════════════════════════════════════════

@@ -6,10 +6,18 @@
 
 ![Node.js](https://img.shields.io/badge/Node.js-v18%2B-339933?style=flat-square&logo=node.js&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-blue?style=flat-square)
-![Tests](https://img.shields.io/badge/Tests-55%20passing-brightgreen?style=flat-square)
+![Tests](https://img.shields.io/badge/Tests-76%20passing-brightgreen?style=flat-square)
 ![Status](https://img.shields.io/badge/Status-Active-success?style=flat-square)
 
-A fully functional BitTorrent client implemented from the ground up in Node.js — no libtorrent, no shortcuts. Speaks the BitTorrent wire protocol directly, handles UDP and HTTP trackers, verifies every piece with SHA-1, and seeds back to the swarm while downloading.
+A fully functional BitTorrent client implemented from the ground up in Node.js — no libtorrent, no shortcuts. Speaks the BitTorrent wire protocol directly, handles UDP and HTTP trackers, discovers peers via DHT, resolves magnet links, verifies every piece with SHA-1, and seeds back to the swarm while downloading.
+
+Three front ends on the same engine:
+
+| Interface | How to run |
+|---|---|
+| ⌨️ CLI (`.torrent` + magnet) | `npm run cli` |
+| 🖥️ Electron desktop app | `npm start` |
+| 🌐 Headless web UI (any browser) | `npm run server` |
 
 </div>
 
@@ -19,7 +27,7 @@ A fully functional BitTorrent client implemented from the ground up in Node.js �
 
 - [Features](#features)
 - [Architecture](#architecture)
-- [Installation](#installation)
+- [Quick Start](#quick-start)
 - [Usage](#usage)
 - [How It Works](#how-it-works)
 - [Project Structure](#project-structure)
@@ -56,6 +64,22 @@ A fully functional BitTorrent client implemented from the ground up in Node.js �
 - **Upload slot management** — unchokes up to 4 peers simultaneously (tit-for-tat foundation)
 - **Request validation** — validates piece index, begin offset, and block length before reading from disk; rejects oversized requests (> 32 KiB)
 
+### ✅ Magnet Links & DHT
+- **Magnet link support** — `magnet:?xt=urn:btih:…` URIs work everywhere: hex and Base32 info hashes, any number of `tr=` trackers
+- **DHT (BEP 5)** — iterative `get_peers` lookup with XOR-distance ordering, `announce_peer` after lookup, and a full DHT node implementation (routing table, tokens, swarm maps) so we can also *serve* other DHT clients
+- **Metadata exchange (BEP 9/10)** — when there is no `.torrent` file, `ut_metadata` piece-by-piece fetch from many peers in parallel, with SHA-1 verification of the assembled info dict as the only trust anchor
+
+```bash
+# .torrent file becomes optional:
+node index.js "magnet:?xt=urn:btih:HASH&dn=name&tr=udp%3A%2F%2Ftracker.example.com%3A1337"
+```
+
+### ✅ Headless Web UI
+- **Runs with no display** — drives the same engine on a NAS, VPS, or Raspberry Pi: `node server.js [--port 9090] [--host 127.0.0.1] [--output dir]`
+- **Live dashboard** — add torrents by magnet or `.torrent` path, watch progress/speeds/peers/ETA in any browser
+- **SSE streaming** — server-sent events push every status update; no polling, no WebSocket dependency
+- **JSON API** — `GET /api/torrents`, `POST /api/add`, `POST /api/remove`, `GET /api/events`
+
 ### ✅ CLI & UX
 - **Live progress bar** — shows percentage, downloaded bytes, download speed, upload speed, ETA, active peer counts, verified piece count, and failed piece count
 - **Coloured output** — header, status messages, and errors are colour-coded via chalk
@@ -78,11 +102,21 @@ A fully functional BitTorrent client implemented from the ground up in Node.js �
 
 ```
 free-torrent-cli/
-├── index.js              Entry point — parses args, opens torrent, starts download
+├── index.js              CLI entry point — parses args (or magnet), starts download
+├── server.js             Headless web server — HTTP + REST API + SSE streaming
+├── electron/
+│   ├── main.js           Electron main process — window, IPC, download engine
+│   └── preload.cjs       Secure renderer bridge (contextBridge)
+├── renderer/             Electron GUI markup + logic
+├── web/                  Headless web dashboard (HTML + JS)
 └── src/
     ├── TorrentParser.js  Bencode decoding, info hash, size calculation
     ├── tracker.js        UDP + HTTP tracker protocols, multi-tracker fallback
-    ├── download.js       Peer connections, piece assembly, verification, progress UI
+    ├── download.js       CLI download loop: peer connections, piece assembly, verification
+    ├── engine.js         Headless event-driven engine (one instance per torrent, cancellable)
+    ├── DHT.js            BEP 5 distributed hash table — client + node in one socket
+    ├── Magnet.js         Magnet URI parsing + full magnet→torrent resolution pipeline
+    ├── MetadataExchange.js  BEP 9/10 ut_metadata fetch (info dict from peers)
     ├── FileManager.js    Multi-file layout, cross-boundary piece writes/reads
     ├── Seeder.js         TCP server, incoming peer handling, piece serving
     ├── Message.js        BitTorrent message builders and parser
@@ -123,7 +157,7 @@ Grab a prebuilt installer from [GitHub Releases](https://github.com/cyberd4ch/fr
 
 Installers are built automatically for every `v*` tag by GitHub Actions.
 
-### Option 2 — Run the Electron GUI from source
+### Option 2 — Electron desktop app from source
 
 **Prerequisites:** Node.js v18 or higher
 
@@ -134,7 +168,19 @@ npm install
 npm start
 ```
 
-### Option 3 — Run the CLI from source
+### Option 3 — Headless web UI (no display needed)
+
+```bash
+git clone https://github.com/cyberd4ch/free-torrent-cli.git
+cd free-torrent-cli
+npm install
+npm run server
+# → open http://127.0.0.1:9090
+```
+
+Flags: `--port`, `--host`, `--output <dir>`. Runs on any Node 18+ machine — NAS, VPS, Raspberry Pi — and is reachable from any browser.
+
+### Option 4 — Run the CLI from source
 
 ```bash
 git clone https://github.com/cyberd4ch/free-torrent-cli.git
@@ -288,11 +334,11 @@ The test suite covers all modules with 55 unit tests and requires no network acc
 Work is phased roughly in this order:
 
 1. **Distribution & CI** *(done)* — automated tests on every push/PR, cross-platform installers + GitHub Releases on `v*` tags, GitHub Pages site
-2. **Magnet links** — DHT (BEP 5) + metadata exchange (BEP 9/10) so `.torrent` files become optional
-3. **Headless web UI** — run the engine as a local server and drive it from any browser
-4. **Speed & protocol hardening** — robust choking algorithm, request pipelining, protocol encryption
+2. **Magnet links** *(done)* — DHT (BEP 5) + metadata exchange (BEP 9/10)
+3. **Headless web UI** *(done)* — `npm run server` + browser dashboard over SSE/REST
+4. **Speed & protocol hardening** — robust tit-for-tat choking, request pipelining, protocol encryption
 
-### 🔵 Magnet Link Support (Phase 2)
+### 🔵 Robust Choking Algorithm (Phase 4)
 Magnet links are the dominant way torrents are shared today — no `.torrent` file needed. Implementing this requires two components:
 
 - **DHT (Distributed Hash Table)** — BEP 5. A decentralised peer discovery mechanism that finds peers using only an info hash, without relying on a tracker. Involves implementing a Kademlia-based routing table, `find_node` and `get_peers` UDP queries, and maintaining a bucket of known DHT nodes.
@@ -313,23 +359,15 @@ The current seeder uses a simple fixed-slot unchoke (4 peers). A full tit-for-ta
 
 This significantly improves download speed in practice by incentivising peers to upload to you in return.
 
-### 🔵 Headless Web UI (Phase 3)
-Run the same engine as a local server so it works on machines with no display (NAS, VPS, Raspberry Pi):
-
-- **Small HTTP + WebSocket server** exposing add / list / remove and streaming progress events
-- Reuses the main-process engine — the browser dashboard mirrors the desktop UI
-- Target usage: `node server.js --port 9090`, then open `http://localhost:9090`
-
 ---
 
 ## Known Limitations
 
-- **No magnet link support** — requires a `.torrent` file (planned, see above)
-- **UDP often blocked** — many networks block outbound UDP; the client falls back to HTTP trackers automatically
-- **No DHT** — peer discovery relies entirely on trackers
-- **Basic choking** — fixed 4-slot unchoke without rate-based ranking (planned, see above)
+- **Basic choking** — fixed 4-slot unchoke without rate-based ranking (planned, see roadmap)
+- **UDP often blocked** — many networks block outbound UDP; the client falls back to HTTP trackers automatically, and DHT peer discovery is affected too
 - **No encryption** — BitTorrent protocol encryption (MSE/PE) is not implemented; some ISPs throttle unencrypted BitTorrent traffic
 - **Single piece pipeline** — requests one piece per peer at a time; pipelining multiple requests would improve throughput
+- **No persistence** — the web server keeps its torrent list in memory; restarts need re-adding (resume of partially downloaded data works)
 
 ---
 

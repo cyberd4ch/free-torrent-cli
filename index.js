@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { open } from './src/TorrentParser.js';
 import downloadTorrent from './src/download.js';
+import { resolveMagnet } from './src/Magnet.js';
 import chalk from 'chalk';
 import path from 'path';
 
@@ -29,6 +30,7 @@ if (args.length === 0) {
     console.log(chalk.white('  Examples:'));
     console.log(chalk.gray('    node index.js kali.torrent'));
     console.log(chalk.gray('    node index.js kali.torrent ~/Downloads'));
+    console.log(chalk.gray('    node index.js "magnet:?xt=urn:btih:HASH&dn=name&tr=..."'));
     console.log('');
     process.exit(0);
 }
@@ -37,8 +39,16 @@ const torrentFile = args[0];
 const outputDir = args[1] ? path.resolve(args[1]) : process.cwd();
 
 try {
-    const torrent = await open(torrentFile);
-    await downloadTorrent(torrent, outputDir);
+    if (torrentFile.startsWith('magnet:?')) {
+        const torrent = await resolveMagnet(torrentFile, {
+            workshopPort: 6881,
+            onStatus: msg => console.log(chalk.gray(`  ${msg}`)),
+        });
+        await downloadTorrent(torrent, outputDir);
+    } else {
+        const torrent = await open(torrentFile);
+        await downloadTorrent(torrent, outputDir);
+    }
 } catch (error) {
     console.error(chalk.red('\n  Error:'), error.message);
     console.error(error.stack);

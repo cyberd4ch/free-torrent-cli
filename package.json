@@ -11,6 +11,7 @@
     "start": "electron .",
     "dev": "electron . --inspect",
     "cli": "node index.js",
+    "server": "node server.js",
     "test": "node tests/run.js",
     "build": "electron-builder --mac",
     "build:win": "electron-builder --win",
