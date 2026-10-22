@@ -793,7 +793,6 @@ test('bencodePrefixEnd finds value boundaries', () => {
 });
 
 await testA('fetchMetadata end-to-end against a fake seeder over TCP', async () => {
-    process.env.FTC_DEBUG_MDX = '1'; // full wire-dance trace on CI
     const info = {
         name: Buffer.from('x'),
         length: 4,
@@ -810,10 +809,14 @@ await testA('fetchMetadata end-to-end against a fake seeder over TCP', async () 
 
         sock.on('data', (data) => {
             buf = Buffer.concat([buf, data]);
-            if (buf.length < 68) {
-                return; // still waiting for our handshake
-            }
-            if (buf.toString('utf8', 1, 20) === 'BitTorrent protocol' && !sentHello) {
+            if (!sentHello) {
+                // Gate applies only until the client's handshake is seen —
+                // after that arbitrary-length frames must flow to drain()
+                // (a lone request frame is only ~25 bytes).
+                if (buf.length < 68) {
+                    return; // still waiting for the client's handshake
+                }
+                if (buf.toString('utf8', 1, 20) !== 'BitTorrent protocol') return;
                 sentHello = true;
                 buf = buf.subarray(68);
                 sock.write(buildExtendedHandshakeBytes(infoHash, crypto.randomBytes(20)));
