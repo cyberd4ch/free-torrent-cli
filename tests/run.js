@@ -5,6 +5,7 @@
 
 import crypto from 'crypto';
 import path from 'path';
+import { fileURLToPath } from 'url';
 import { Buffer } from 'buffer';
 
 function sleep(ms) {
@@ -902,7 +903,8 @@ await testA('web server: dashboard, add via path, list, and remove — full API 
     }));
 
     const srv = spawn(process.execPath, ['server.js', '--port', '0', '--host', '127.0.0.1'], {
-        cwd: path.join(import.meta.dirname ?? process.cwd(), '..').replace(/tests$/, ''),
+        // Node 18 has no import.meta.dirname — derive the tests dir from the URL
+        cwd: path.join(path.dirname(fileURLToPath(import.meta.url)), '..'),
         stdio: ['ignore', 'pipe', 'pipe'],
     });
     srv.stdout.setEncoding('utf8');
