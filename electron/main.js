@@ -31,8 +31,10 @@ function createWindow() {
 
     mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'));
 
-    // Open DevTools so we can see renderer errors
-    mainWindow.webContents.openDevTools({ mode: 'detach' });
+    // Open DevTools only in development so we can see renderer errors
+    if (!app.isPackaged) {
+        mainWindow.webContents.openDevTools({ mode: 'detach' });
+    }
 
     mainWindow.once('ready-to-show', () => mainWindow.show());
     mainWindow.on('closed', () => { mainWindow = null; });

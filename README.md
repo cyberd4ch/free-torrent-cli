@@ -64,6 +64,14 @@ A fully functional BitTorrent client implemented from the ground up in Node.js �
 - **Optional output directory** — specify where files are saved as a second argument
 - **Usage message** — running with no arguments prints usage and examples
 
+### ✅ GUI (Electron)
+- **Full desktop app** — pick `.torrent` files through native dialogs, choose the output directory, add multiple torrents at once
+- **Live dashboard** — per-torrent cards with progress, down/up speed, peer counts, ETA, and verified/failed piece counts
+- **Concurrent downloads** — the main process runs one engine instance per torrent in parallel
+- **Seeding state** — completed torrents switch to seed mode and keep serving peers
+- **Show in Finder/Explorer** — jump straight to the downloaded files
+- **Secure IPC** — context-isolated renderer with a minimal `contextBridge` preload API
+
 ---
 
 ## Architecture
@@ -103,17 +111,36 @@ TorrentParser  ──►  tracker.js  ──►  peer list
 
 ---
 
-## Installation
+## Quick Start
+
+### Option 1 — Download the desktop app (easiest)
+
+Grab a prebuilt installer from [GitHub Releases](https://github.com/cyberd4ch/free-torrent-cli/releases):
+
+- **macOS** (Apple Silicon & Intel): open the `.dmg`, drag FreeTorrent to Applications
+- **Windows**: run the `.exe` installer
+- **Linux**: `chmod +x FreeTorrent-*.AppImage && ./FreeTorrent-*.AppImage` (or install the `.deb`)
+
+Installers are built automatically for every `v*` tag by GitHub Actions.
+
+### Option 2 — Run the Electron GUI from source
 
 **Prerequisites:** Node.js v18 or higher
 
 ```bash
-# Clone the repository
 git clone https://github.com/cyberd4ch/free-torrent-cli.git
 cd free-torrent-cli
-
-# Install dependencies
 npm install
+npm start
+```
+
+### Option 3 — Run the CLI from source
+
+```bash
+git clone https://github.com/cyberd4ch/free-torrent-cli.git
+cd free-torrent-cli
+npm install
+node index.js <torrent-file> [output-dir]
 ```
 
 **Dependencies:**
@@ -207,10 +234,13 @@ BitTorrent treats a multi-file torrent as a single contiguous byte stream. `File
 
 ```
 free-torrent-cli/
-├── index.js
-├── package.json
-├── README.md
-├── LICENSE
+├── index.js              CLI entry point — parses args, opens torrent, starts download
+├── electron/
+│   ├── main.js           Main process — window, IPC, per-torrent download engine
+│   └── preload.cjs       Secure renderer bridge (contextBridge)
+├── renderer/
+│   ├── index.html        GUI markup
+│   └── app.js            GUI logic
 ├── src/
 │   ├── TorrentParser.js
 │   ├── tracker.js
@@ -220,8 +250,13 @@ free-torrent-cli/
 │   ├── Message.js
 │   ├── Pieces.js
 │   └── util.js
-└── tests/
-    └── run.js
+├── tests/
+│   └── run.js
+├── docs/                 GitHub Pages site
+├── .github/workflows/    CI — tests.yml, release.yml (build + Release + Pages)
+├── package.json
+├── README.md
+└── LICENSE
 ```
 
 ---
@@ -248,9 +283,16 @@ The test suite covers all modules with 55 unit tests and requires no network acc
 
 ---
 
-## Planned Features
+## Roadmap
 
-### 🔵 Magnet Link Support
+Work is phased roughly in this order:
+
+1. **Distribution & CI** *(done)* — automated tests on every push/PR, cross-platform installers + GitHub Releases on `v*` tags, GitHub Pages site
+2. **Magnet links** — DHT (BEP 5) + metadata exchange (BEP 9/10) so `.torrent` files become optional
+3. **Headless web UI** — run the engine as a local server and drive it from any browser
+4. **Speed & protocol hardening** — robust choking algorithm, request pipelining, protocol encryption
+
+### 🔵 Magnet Link Support (Phase 2)
 Magnet links are the dominant way torrents are shared today — no `.torrent` file needed. Implementing this requires two components:
 
 - **DHT (Distributed Hash Table)** — BEP 5. A decentralised peer discovery mechanism that finds peers using only an info hash, without relying on a tracker. Involves implementing a Kademlia-based routing table, `find_node` and `get_peers` UDP queries, and maintaining a bucket of known DHT nodes.
@@ -270,6 +312,13 @@ The current seeder uses a simple fixed-slot unchoke (4 peers). A full tit-for-ta
 - **Seeding mode** — when fully seeded, switch ranking criterion from download rate to upload rate (reward peers who help the swarm)
 
 This significantly improves download speed in practice by incentivising peers to upload to you in return.
+
+### 🔵 Headless Web UI (Phase 3)
+Run the same engine as a local server so it works on machines with no display (NAS, VPS, Raspberry Pi):
+
+- **Small HTTP + WebSocket server** exposing add / list / remove and streaming progress events
+- Reuses the main-process engine — the browser dashboard mirrors the desktop UI
+- Target usage: `node server.js --port 9090`, then open `http://localhost:9090`
 
 ---
 
