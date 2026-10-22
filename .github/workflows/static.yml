@@ -36,8 +36,9 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          # Upload entire repository
-          path: '.'
+          # https://cyberd4ch.github.io/free-torrent-cli/ serves this dir —
+          # index.html sits at its root
+          path: './docs'
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v5
