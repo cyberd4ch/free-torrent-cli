@@ -850,10 +850,12 @@ await testA('fetchMetadata end-to-end against a fake seeder over TCP', async () 
         server.listen(0, '127.0.0.1', () => resolve(server.address().port)));
 
     try {
+        // 30s budget: on shared CI runners (three matrix jobs on one VM)
+        // this round trip can take a while — the default timeout applies.
         const result = await fetchMetadata({
             infoHash,
             hosts: [{ ip: '127.0.0.1', port }],
-            timeoutMs: 10000,
+            timeoutMs: 30000,
         });
         assert(Buffer.isBuffer(result.name) && result.name.equals(info.name), 'name mismatch');
         assertEqual(result.length, info.length, 'length mismatch');

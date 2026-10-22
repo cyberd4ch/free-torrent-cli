@@ -292,7 +292,8 @@ function connectMetadataPeer({ ip, port }, infoHash, ctx) {
                     );
                     const info = bencode.decode(total);
                     ctx.onInfo(info);
-                }                drain();
+                }
+                drain();
             }
         } catch (_) {
             onDone();
@@ -301,7 +302,7 @@ function connectMetadataPeer({ ip, port }, infoHash, ctx) {
 }
 
 function dictMsgType(dict) {
-    return dict.msg_type ?? dict[['msg_type']];
+    return dict.msg_type ?? dict['msg_type'];
 }
 
 // Recursively convert decoded values to Buffers — downstream code
