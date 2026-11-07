@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.0] - 2026-11-07
+
+### Changed
+- **Rewritten in Rust.** The engine lives in `crates/core`, the binary in
+  `crates/cli` (`ftc`). Ported: bencode, metainfo and magnet parsing, HTTP + UDP
+  trackers, the peer wire protocol, SHA-1 piece verification, multi-file storage,
+  resume verification and tracker refill.
+- Info hashes are computed from the original `info` dictionary bytes, not a
+  re-encoded value, so unusual key ordering cannot change a torrent's identity.
+- Torrent paths are validated; `..`, absolute paths and separators are rejected
+  before any file is opened.
+- Peer frames are capped at 2 MiB before allocation.
+
+### Added
+- 25 tests, including an end-to-end download from a fake local peer.
+- `--peers` to bypass the tracker and `--max-peers` to tune concurrency.
+
+### Removed
+- The Node.js engine, Electron app, web UI and their tests. Magnet *downloads*
+  (BEP 9/10), DHT (BEP 5), seeding and the front ends are staged; see the README
+  parity table.
+
 ## [Unreleased]
 
 ### Added

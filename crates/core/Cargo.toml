@@ -1,0 +1,14 @@
+[package]
+name = "ftc-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "BitTorrent protocol engine for free-torrent-cli"
+
+[dependencies]
+sha1 = { workspace = true }
+hex = { workspace = true }
+rand = { workspace = true }
+ureq = { workspace = true }
+base32 = { workspace = true }
+percent-encoding = { workspace = true }

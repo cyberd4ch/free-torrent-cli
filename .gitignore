@@ -1,4 +1,3 @@
-node_modules/
-dist/
-out/
+/target
+**/*.rs.bk
 .DS_Store
