@@ -35,6 +35,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the torrent from those exact bytes. Verified end to end against a fake peer.
 - `Torrent::from_info` preserves the raw info dictionary, so the recomputed hash still
   matches the magnet.
+- **DHT (BEP 5) peer discovery and announce.** A KRPC client over UDP: 160-bucket
+  routing table, XOR-ordered `get_peers` hunts with token capture from every node
+  that hands one, and `announce_peer` to the token-holding closest nodes after a
+  download. Trackerless magnets resolve through it; `--no-dht` opts out.
+- 34 tests, including a UDP router → holder chain exercising a full DHT hunt and a
+  token-validated announce.
 
 ### Added
 - **Magnet link support** — `node index.js "magnet:?xt=urn:btih:…"` now works with no

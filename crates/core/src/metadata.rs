@@ -5,6 +5,7 @@
 //! magnet — the hash is the root of trust, not the peer.
 
 use crate::bencode::{self, Value};
+use crate::dht::{self, Dht};
 use crate::error::{Error, Result};
 use crate::peer::{self, Message};
 use crate::tracker::{self, AnnounceRequest};
@@ -15,6 +16,8 @@ use std::time::Duration;
 pub const METADATA_PIECE: usize = 16 * 1024;
 const MAX_METADATA: usize = 8 * 1024 * 1024;
 const UT_METADATA: &[u8] = b"ut_metadata";
+/// Waiting time for one trackerless-magnet DHT hunt.
+const DHT_HUNT: Duration = Duration::from_secs(15);
 
 pub fn extension_handshake(port: u16) -> Vec<u8> {
     bencode::encode(&Value::Dict(vec![
@@ -144,21 +147,36 @@ pub fn fetch_from_peer(
     Ok(metadata)
 }
 
-/// Ask trackers for peers and try them in turn until one serves valid metadata.
+/// Ask trackers for peers and try them in turn until one serves valid
+/// metadata; a trackerless magnet falls back to the DHT (BEP 5).
 pub fn fetch(
     trackers: &[String],
     info_hash: &[u8; 20],
     peer_id: &[u8; 20],
     port: u16,
+    use_dht: bool,
 ) -> Result<Vec<u8>> {
-    if trackers.is_empty() {
-        return Err(Error::Tracker(
-            "magnet has no trackers, and DHT is not ported yet".into(),
-        ));
-    }
-    let request = AnnounceRequest::new(*info_hash, *peer_id, 0, METADATA_PIECE as u64);
     let mut peers = Vec::new();
     let mut errors = Vec::new();
+    if trackers.is_empty() && !use_dht {
+        return Err(Error::Tracker(
+            "magnet has no trackers and DHT discovery is disabled".into(),
+        ));
+    }
+    if trackers.is_empty() {
+        eprintln!("magnet has no trackers — hunting peers via the DHT");
+        let node = Dht::boot(dht::random_node_id(), port)
+            .map_err(|err| Error::Tracker(format!("DHT bootstrap failed: {err}")))?;
+        let found = node.peer_hunt(*info_hash, 30, DHT_HUNT);
+        if found.is_empty() {
+            return Err(Error::Tracker(
+                "magnet has no trackers and the DHT found no peers".into(),
+            ));
+        }
+        peers.extend(found);
+    }
+
+    let request = AnnounceRequest::new(*info_hash, *peer_id, 0, METADATA_PIECE as u64);
     for url in trackers {
         match tracker::announce(url, &request) {
             Ok(response) => peers.extend(response.peers.into_iter().filter(|peer| peer.is_ipv4())),

@@ -35,12 +35,12 @@ ported; the front ends and peer-discovery extras are staged behind them.
 | Resume: verify existing pieces on disk | ✅ |
 | Tracker re-announce / peer refill when peers run dry | ✅ |
 | CLI with live progress | ✅ |
-| DHT (BEP 5) | ⬜ not yet |
+| DHT (BEP 5): get_peers hunting + announce | ✅ |
 | Seeding / upload slots | ⬜ not yet |
 | Desktop (Electron) and web UI | ⬜ not yet |
 
-Magnet links download today, but only when the magnet carries at least one tracker —
-peer discovery without a tracker needs DHT, which is the next stage.
+Magnet links download today, tracker or not: a trackerless magnet hunts its peers
+through the DHT (BEP 5), then announces itself to the closest nodes when done.
 
 ## Quick start
 
@@ -57,6 +57,7 @@ OPTIONS:
     -o, --output <dir>    where files are written (default: current directory)
         --peers <list>    comma-separated host:port peers, skipping the tracker
         --max-peers <n>   simultaneous peer connections (default: 6)
+        --no-dht          skip DHT peer discovery (trackers only)
 ```
 
 Progress is printed in place:
@@ -73,6 +74,7 @@ crates/core     protocol engine (library)
   torrent.rs    metainfo parsing, piece table, file layout, sanitised paths
   magnet.rs     magnet URIs, hex and base32 info hashes
   tracker.rs    HTTP + UDP announces, compact peer decoding
+  dht.rs        BEP 5 peer discovery: KRPC, routing table, announce
   peer.rs       wire framing and message codec
   storage.rs    logical stream → files, piece writes, resume verification
   session.rs    peer workers, retrying pieces, progress accounting
@@ -87,6 +89,9 @@ Design notes that differ from the Node version:
   contains a separator; a hostile `.torrent` cannot write outside the output directory.
 - **Bounded frames.** Peer frames are capped at 2 MiB before allocation, so a malicious
   length header cannot exhaust memory.
+- **DHT as a client.** The node discovers and announces but does not service inbound
+  queries yet; a get_peers token is kept from any node that hands one, values or not —
+  the closest nodes for a torrent usually do not hold values themselves.
 - **Fail fast, retry narrowly.** A piece that fails SHA-1 goes back on the queue; a peer
   that misbehaves is dropped. The run fails only after four refill attempts.
 
@@ -98,14 +103,14 @@ cargo clippy --all-targets -- -D warnings
 cargo fmt --all -- --check
 ```
 
-The suite includes an end-to-end test: a fake peer on localhost serves a real torrent,
-and the session downloads, verifies and writes it.
+The suite includes end-to-end tests: a fake peer on localhost serves a real torrent and
+the session downloads, verifies and writes it, and a fake router → holder chain over
+UDP exercises a full DHT hunt and a token-validated announce.
 
 ## Roadmap
 
-1. DHT (BEP 5) — peer discovery without a tracker, so trackerless magnets work.
-2. Seeding and upload slots.
-3. A local HTTP API, then the web and desktop front ends on top of it.
+1. Seeding and upload slots.
+2. A local HTTP API, then the web and desktop front ends on top of it.
 
 ## License
 

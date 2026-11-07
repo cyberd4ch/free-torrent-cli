@@ -1,5 +1,6 @@
 //! Download orchestration: connect to peers, fetch pieces, verify, write, resume.
 
+use crate::dht::{self, Dht};
 use crate::error::{Error, Result};
 use crate::peer::{self, Message, BLOCK_SIZE};
 use crate::storage::Storage;
@@ -14,10 +15,17 @@ use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
+/// How many DHT peers to fold into one tracker refill.
+const DHT_HUNT_WANT: usize = 16;
+/// Waiting time per DHT refill inside a tracker cycle.
+const DHT_REFILL: Duration = Duration::from_secs(6);
+
 #[derive(Debug, Clone)]
 pub struct Options {
     pub max_peers: usize,
     pub port: u16,
+    /// Discover peers from the DHT (BEP 5) in addition to the trackers.
+    pub use_dht: bool,
 }
 
 impl Default for Options {
@@ -25,6 +33,7 @@ impl Default for Options {
         Options {
             max_peers: 6,
             port: 6881,
+            use_dht: true,
         }
     }
 }
@@ -87,6 +96,7 @@ pub struct Session {
     progress: Arc<Progress>,
     peer_id: [u8; 20],
     options: Options,
+    dht: Option<Dht>,
     resumed: usize,
 }
 
@@ -128,6 +138,7 @@ impl Session {
             progress: progress.clone(),
             peer_id: make_peer_id(),
             options,
+            dht: None,
             resumed,
         };
         Ok((session, progress))
@@ -138,9 +149,17 @@ impl Session {
     }
 
     /// Run to completion, using `explicit_peers` when supplied (tests, `--peer`).
-    pub fn run(self, explicit_peers: Option<Vec<SocketAddr>>) -> Result<Stats> {
+    pub fn run(mut self, explicit_peers: Option<Vec<SocketAddr>>) -> Result<Stats> {
         let started = Instant::now();
         let mut attempts = 0;
+        // Unless the caller handed over peers by hand, join the DHT so that
+        // discovery does not rely on trackers alone.
+        if explicit_peers.is_none() && self.options.use_dht {
+            match Dht::boot(dht::random_node_id(), self.options.port) {
+                Ok(node) => self.dht = Some(node),
+                Err(err) => eprintln!("DHT unavailable, trackers only: {err}"),
+            }
+        }
         loop {
             let remaining = self.missing.lock().unwrap().len();
             if remaining == 0 {
@@ -184,6 +203,10 @@ impl Session {
                 let _ = tracker::announce(url, &request);
             }
         }
+        // Tell the DHT where to find us now that the download is complete.
+        if let Some(node) = &self.dht {
+            node.announce(self.torrent.info_hash, self.options.port);
+        }
 
         Ok(Stats {
             downloaded: self.progress.snapshot().downloaded,
@@ -215,6 +238,11 @@ impl Session {
                 }
                 Err(err) => errors.push(format!("{url}: {err}")),
             }
+        }
+        // Trackers give the swarm a start; the DHT (if up) pads the list with
+        // whichever peers it knows for this torrent.
+        if let Some(node) = &self.dht {
+            peers.extend(node.peer_hunt(self.torrent.info_hash, DHT_HUNT_WANT, DHT_REFILL));
         }
         let mut seen = std::collections::HashSet::new();
         peers.retain(|address| seen.insert(*address));
@@ -481,6 +509,7 @@ mod tests {
             Options {
                 max_peers: 1,
                 port: 6881,
+                use_dht: false,
             },
         )
         .unwrap();

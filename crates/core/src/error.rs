@@ -9,6 +9,7 @@ pub enum Error {
     Tracker(String),
     Peer(String),
     Storage(String),
+    Dht(String),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -23,6 +24,7 @@ impl fmt::Display for Error {
             Error::Tracker(msg) => write!(f, "tracker error: {msg}"),
             Error::Peer(msg) => write!(f, "peer error: {msg}"),
             Error::Storage(msg) => write!(f, "storage error: {msg}"),
+            Error::Dht(msg) => write!(f, "dht error: {msg}"),
         }
     }
 }

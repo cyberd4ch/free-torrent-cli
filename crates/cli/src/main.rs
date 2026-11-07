@@ -17,6 +17,7 @@ OPTIONS:
     -o, --output <dir>    where files are written (default: current directory)
         --peers <list>    comma-separated host:port peers, skipping the tracker
         --max-peers <n>   simultaneous peer connections (default: 6)
+        --no-dht          skip DHT peer discovery (trackers only)
     -h, --help            show this help
     -V, --version         show the version
 ";
@@ -74,6 +75,9 @@ fn run() -> Result<(), String> {
                     return Err("--max-peers must be at least 1".into());
                 }
             }
+            "--no-dht" => {
+                options.use_dht = false;
+            }
             other if other.starts_with('-') => {
                 return Err(format!("unknown option {other}\n\n{USAGE}"))
             }
@@ -95,9 +99,14 @@ fn run() -> Result<(), String> {
             link.trackers.len()
         );
         let peer_id = ftc_core::session::make_peer_id();
-        let info =
-            ftc_core::metadata::fetch(&link.trackers, &link.info_hash, &peer_id, options.port)
-                .map_err(|err| format!("metadata exchange failed: {err}"))?;
+        let info = ftc_core::metadata::fetch(
+            &link.trackers,
+            &link.info_hash,
+            &peer_id,
+            options.port,
+            options.use_dht,
+        )
+        .map_err(|err| format!("metadata exchange failed: {err}"))?;
         Torrent::from_info(&info, &link.trackers).map_err(|err| err.to_string())?
     } else {
         let bytes = std::fs::read(&target).map_err(|err| format!("cannot read {target}: {err}"))?;

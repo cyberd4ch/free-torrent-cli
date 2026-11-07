@@ -2,13 +2,14 @@
 //!
 //! Ported from the Node.js implementation: bencode, metainfo and magnet parsing,
 //! HTTP/UDP tracker announces, BEP 9/10 metadata exchange, the peer wire protocol,
-//! SHA-1 piece verification, multi-file storage, resume scanning, and a downloading
-//! session.
+//! SHA-1 piece verification, multi-file storage, resume scanning, a downloading
+//! session, and DHT (BEP 5) peer discovery with announce.
 //!
-//! Not yet ported (tracked in the README): DHT (BEP 5), seeding/upload, and the
-//! desktop/web front ends.
+//! Not yet ported (tracked in the README): seeding/upload and the desktop/web
+//! front ends.
 
 pub mod bencode;
+pub mod dht;
 pub mod error;
 pub mod magnet;
 pub mod metadata;
