@@ -36,11 +36,13 @@ ported; the front ends and peer-discovery extras are staged behind them.
 | Tracker re-announce / peer refill when peers run dry | ✅ |
 | CLI with live progress | ✅ |
 | DHT (BEP 5): get_peers hunting + announce | ✅ |
-| Seeding / upload slots | ⬜ not yet |
+| Seeding: serve verified pieces (`--seed`) | ✅ |
 | Desktop (Electron) and web UI | ⬜ not yet |
 
 Magnet links download today, tracker or not: a trackerless magnet hunts its peers
 through the DHT (BEP 5), then announces itself to the closest nodes when done.
+And it seeds on demand: pass `--seed 60` and once the download finishes, the
+engine opens a listener and serves exactly the pieces it can re-verify on disk.
 
 ## Quick start
 
@@ -58,6 +60,7 @@ OPTIONS:
         --peers <list>    comma-separated host:port peers, skipping the tracker
         --max-peers <n>   simultaneous peer connections (default: 6)
         --no-dht          skip DHT peer discovery (trackers only)
+        --seed <secs>     after finishing, serve pieces to peers for <secs>s
 ```
 
 Progress is printed in place:
@@ -76,6 +79,7 @@ crates/core     protocol engine (library)
   tracker.rs    HTTP + UDP announces, compact peer decoding
   dht.rs        BEP 5 peer discovery: KRPC, routing table, announce
   peer.rs       wire framing and message codec
+  seed.rs       seeder: serve verified pieces to inbound peers
   storage.rs    logical stream → files, piece writes, resume verification
   session.rs    peer workers, retrying pieces, progress accounting
 crates/cli      the `ftc` binary
@@ -92,6 +96,9 @@ Design notes that differ from the Node version:
 - **DHT as a client.** The node discovers and announces but does not service inbound
   queries yet; a get_peers token is kept from any node that hands one, values or not —
   the closest nodes for a torrent usually do not hold values themselves.
+- **The seeder lies about nothing.** The Bitfield is built once from
+  `verify_existing`, so a half-downloaded directory seeds only what actually
+  verifies; a request outside that set disconnects the peer instead of guessing.
 - **Fail fast, retry narrowly.** A piece that fails SHA-1 goes back on the queue; a peer
   that misbehaves is dropped. The run fails only after four refill attempts.
 
@@ -104,13 +111,13 @@ cargo fmt --all -- --check
 ```
 
 The suite includes end-to-end tests: a fake peer on localhost serves a real torrent and
-the session downloads, verifies and writes it, and a fake router → holder chain over
-UDP exercises a full DHT hunt and a token-validated announce.
+the session downloads, verifies and writes it, a fake router → holder chain over
+UDP exercises a full DHT hunt and a token-validated announce, and a fake leecher
+downloads one block from the seeder and is dropped for asking beyond the torrent.
 
 ## Roadmap
 
-1. Seeding and upload slots.
-2. A local HTTP API, then the web and desktop front ends on top of it.
+1. A local HTTP API, then the web and desktop front ends on top of it.
 
 ## License
 

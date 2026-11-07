@@ -9,6 +9,7 @@ pub enum Error {
     Tracker(String),
     Peer(String),
     Storage(String),
+    Seed(String),
     Dht(String),
 }
 
@@ -24,6 +25,7 @@ impl fmt::Display for Error {
             Error::Tracker(msg) => write!(f, "tracker error: {msg}"),
             Error::Peer(msg) => write!(f, "peer error: {msg}"),
             Error::Storage(msg) => write!(f, "storage error: {msg}"),
+            Error::Seed(msg) => write!(f, "seed error: {msg}"),
             Error::Dht(msg) => write!(f, "dht error: {msg}"),
         }
     }

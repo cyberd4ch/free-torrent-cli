@@ -18,6 +18,7 @@ OPTIONS:
         --peers <list>    comma-separated host:port peers, skipping the tracker
         --max-peers <n>   simultaneous peer connections (default: 6)
         --no-dht          skip DHT peer discovery (trackers only)
+        --seed <secs>     after finishing, serve pieces to peers for <secs>s
     -h, --help            show this help
     -V, --version         show the version
 ";
@@ -38,6 +39,7 @@ fn run() -> Result<(), String> {
     let mut output = PathBuf::from(".");
     let mut peers: Option<Vec<SocketAddr>> = None;
     let mut options = Options::default();
+    let mut seed_secs: u64 = 0;
 
     while let Some(arg) = args.next() {
         match arg.as_str() {
@@ -77,6 +79,13 @@ fn run() -> Result<(), String> {
             }
             "--no-dht" => {
                 options.use_dht = false;
+            }
+            "--seed" => {
+                let value = args.next().ok_or("--seed needs seconds")?;
+                seed_secs = value.parse().map_err(|err| format!("bad --seed: {err}"))?;
+                if seed_secs == 0 {
+                    return Err("--seed must be at least 1".into());
+                }
             }
             other if other.starts_with('-') => {
                 return Err(format!("unknown option {other}\n\n{USAGE}"))
@@ -121,6 +130,14 @@ fn run() -> Result<(), String> {
         torrent.piece_count()
     );
 
+    // The Session takes ownership of the torrent and the options; "--seed"
+    // needs those after the download, so they are captured by value first.
+    let seed_setup = if seed_secs > 0 {
+        Some((Arc::new(torrent.clone()), options.port, options.max_peers))
+    } else {
+        None
+    };
+
     let (session, progress) =
         Session::open(torrent, &output, options).map_err(|err| err.to_string())?;
 
@@ -150,6 +167,29 @@ fn run() -> Result<(), String> {
                 stats.elapsed.as_secs_f64(),
                 stats.resumed
             );
+            if let Some((seed_torrent, seed_port, seed_max_peers)) = seed_setup {
+                // A fresh Storage over the finished files; serve() refuses
+                // to offer anything it cannot re-verify on disk.
+                let storage = match ftc_core::storage::Storage::open(&output, &seed_torrent) {
+                    Ok(storage) => storage,
+                    Err(err) => {
+                        eprintln!("ftc: could not open files for seeding: {err}");
+                        return Ok(());
+                    }
+                };
+                match ftc_core::seed::serve(
+                    Arc::new(storage),
+                    seed_torrent,
+                    seed_port,
+                    seed_max_peers,
+                    Duration::from_secs(seed_secs),
+                ) {
+                    Ok(report) => {
+                        println!("seeded {} bytes to {} peer(s)", report.bytes, report.peers)
+                    }
+                    Err(err) => eprintln!("ftc: seeding failed: {err}"),
+                }
+            }
             Ok(())
         }
         Err(err) => Err(err.to_string()),

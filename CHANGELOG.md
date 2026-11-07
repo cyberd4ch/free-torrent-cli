@@ -41,6 +41,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   download. Trackerless magnets resolve through it; `--no-dht` opts out.
 - 34 tests, including a UDP router → holder chain exercising a full DHT hunt and a
   token-validated announce.
+- **Seeding (`--seed <secs>`).** After the download completes, the engine opens a
+  listener and serves exactly the pieces `verify_existing` passes: MSB-first
+  Bitfield, unchoke on interest, 128 KiB request cap, one thread per peer, and
+  a report of bytes and peers served. A partially-downloaded directory seeds
+  only what verifies — the seeder lies about nothing.
+- 2 more tests: a fake leecher round-trip (block served, impossible request
+  drops the connection) and a wrong-info-hash rejection; 36 in total.
 
 ### Added
 - **Magnet link support** — `node index.js "magnet:?xt=urn:btih:…"` now works with no
