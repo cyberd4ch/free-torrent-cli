@@ -30,6 +30,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Metadata exchange (BEP 9/10).** Magnet links now download: the client fetches the
+  `info` dictionary from a peer, verifies it against the magnet's info hash, and builds
+  the torrent from those exact bytes. Verified end to end against a fake peer.
+- `Torrent::from_info` preserves the raw info dictionary, so the recomputed hash still
+  matches the magnet.
+
+### Added
 - **Magnet link support** — `node index.js "magnet:?xt=urn:btih:…"` now works with no
   `.torrent` file, everywhere the engine runs (CLI; web server too)
 - **DHT peer discovery (BEP 5)** — iterative `get_peers` lookup ordered by XOR

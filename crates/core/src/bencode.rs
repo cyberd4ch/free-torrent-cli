@@ -64,6 +64,15 @@ pub fn decode(input: &[u8]) -> Result<Value> {
     decode_with_info(input).0
 }
 
+/// Decode one value from the front of `input`, returning it with the bytes consumed.
+/// Extension messages (BEP 10) carry a bencoded header followed by raw payload.
+pub fn decode_prefix(input: &[u8]) -> Result<(Value, usize)> {
+    let mut parser = Parser { input, pos: 0 };
+    let mut info = None;
+    let value = parser.parse_value(0, &mut info)?;
+    Ok((value, parser.pos))
+}
+
 /// Decode and also return the span of the top-level `info` value, if present.
 pub fn decode_with_info(input: &[u8]) -> (Result<Value>, Option<Range<usize>>) {
     let mut parser = Parser { input, pos: 0 };

@@ -188,6 +188,34 @@ impl Torrent {
         })
     }
 
+    /// Build a torrent from a raw `info` dictionary, as fetched over BEP 9 metadata
+    /// exchange, wrapping it with the magnet's trackers. The info bytes are preserved
+    /// verbatim so the recomputed info hash still matches the magnet link.
+    pub fn from_info(info: &[u8], trackers: &[String]) -> Result<Self> {
+        let mut meta = Vec::with_capacity(info.len() + 256);
+        meta.push(b'd');
+        if let Some(first) = trackers.first() {
+            meta.extend_from_slice(b"8:announce");
+            meta.extend_from_slice(first.len().to_string().as_bytes());
+            meta.push(b':');
+            meta.extend_from_slice(first.as_bytes());
+        }
+        if !trackers.is_empty() {
+            let tiers = Value::List(
+                trackers
+                    .iter()
+                    .map(|url| Value::List(vec![Value::Bytes(url.as_bytes().to_vec())]))
+                    .collect(),
+            );
+            meta.extend_from_slice(b"13:announce-list");
+            meta.extend_from_slice(&bencode::encode(&tiers));
+        }
+        meta.extend_from_slice(b"4:info");
+        meta.extend_from_slice(info);
+        meta.push(b'e');
+        Torrent::parse(&meta)
+    }
+
     pub fn piece_count(&self) -> usize {
         self.pieces.len()
     }

@@ -6,7 +6,7 @@
 
 ![Rust](https://img.shields.io/badge/Rust-1.75%2B-000000?style=flat-square&logo=rust)
 ![License](https://img.shields.io/badge/License-MIT-blue?style=flat-square)
-![Tests](https://img.shields.io/badge/Tests-25%20passing-brightgreen?style=flat-square)
+![Tests](https://img.shields.io/badge/Tests-28%20passing-brightgreen?style=flat-square)
 
 Speaks the BitTorrent wire protocol directly — no libtorrent, no shortcuts.
 Verifies every piece with SHA-1, resumes from disk, and handles multi-file
@@ -26,6 +26,7 @@ ported; the front ends and peer-discovery extras are staged behind them.
 | Bencode codec (with exact `info` byte-span for the info hash) | ✅ |
 | `.torrent` parsing, single and multi-file | ✅ |
 | Magnet URI parsing (hex + base32 info hashes) | ✅ |
+| Metadata exchange (BEP 9/10), so magnet-only downloads | ✅ |
 | HTTP tracker announces (compact + dictionary peers) | ✅ |
 | UDP tracker announces (BEP 15) | ✅ |
 | Peer wire protocol (handshake, bitfield, choke, request/piece) | ✅ |
@@ -35,12 +36,11 @@ ported; the front ends and peer-discovery extras are staged behind them.
 | Tracker re-announce / peer refill when peers run dry | ✅ |
 | CLI with live progress | ✅ |
 | DHT (BEP 5) | ⬜ not yet |
-| Metadata exchange (BEP 9/10), so magnet-only downloads | ⬜ not yet |
 | Seeding / upload slots | ⬜ not yet |
 | Desktop (Electron) and web UI | ⬜ not yet |
 
-Magnet links parse today; downloading from one needs BEP 9 metadata exchange, which is
-the next stage. The CLI says so explicitly rather than failing silently.
+Magnet links download today, but only when the magnet carries at least one tracker —
+peer discovery without a tracker needs DHT, which is the next stage.
 
 ## Quick start
 
@@ -103,10 +103,9 @@ and the session downloads, verifies and writes it.
 
 ## Roadmap
 
-1. Metadata exchange (BEP 9/10) — completes magnet support.
-2. DHT (BEP 5) — peer discovery without a tracker.
-3. Seeding and upload slots.
-4. A local HTTP API, then the web and desktop front ends on top of it.
+1. DHT (BEP 5) — peer discovery without a tracker, so trackerless magnets work.
+2. Seeding and upload slots.
+3. A local HTTP API, then the web and desktop front ends on top of it.
 
 ## License
 

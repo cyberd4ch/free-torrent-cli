@@ -89,13 +89,16 @@ fn run() -> Result<(), String> {
     let target = target.ok_or_else(|| format!("no torrent given\n\n{USAGE}"))?;
     let torrent = if target.starts_with("magnet:") {
         let link = magnet::parse(&target).map_err(|err| err.to_string())?;
-        return Err(format!(
-            "magnet links need metadata exchange (BEP 9), which is not ported yet.\n\
-             info hash: {}\ntrackers: {}\n\
-             Use the .torrent file for now; the remaining port stages are tracked in the README.",
+        println!(
+            "magnet {} — {} trackers, fetching metadata",
             hex::encode(link.info_hash),
             link.trackers.len()
-        ));
+        );
+        let peer_id = ftc_core::session::make_peer_id();
+        let info =
+            ftc_core::metadata::fetch(&link.trackers, &link.info_hash, &peer_id, options.port)
+                .map_err(|err| format!("metadata exchange failed: {err}"))?;
+        Torrent::from_info(&info, &link.trackers).map_err(|err| err.to_string())?
     } else {
         let bytes = std::fs::read(&target).map_err(|err| format!("cannot read {target}: {err}"))?;
         Torrent::parse(&bytes).map_err(|err| err.to_string())?
