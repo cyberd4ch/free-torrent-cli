@@ -47,7 +47,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a report of bytes and peers served. A partially-downloaded directory seeds
   only what verifies — the seeder lies about nothing.
 - 2 more tests: a fake leecher round-trip (block served, impossible request
-  drops the connection) and a wrong-info-hash rejection; 36 in total.
+  drops the connection) and a wrong-info-hash rejection; 37 in total.
+
+### Fixed
+- `announce_peer` retries a datagram that goes unacknowledged inside its
+  budget instead of counting a dropped UDP packet as a silent node; a
+  deterministic test drops the first announce to pin the behaviour.
 
 ### Added
 - **Magnet link support** — `node index.js "magnet:?xt=urn:btih:…"` now works with no

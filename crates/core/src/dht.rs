@@ -24,6 +24,11 @@ const ALPHA: usize = 4;
 const STALE_AFTER: Duration = Duration::from_secs(6);
 const BOOTSTRAP_BUDGET: Duration = Duration::from_secs(5);
 const ANNOUNCE_BUDGET: Duration = Duration::from_secs(3);
+/// How long one announce attempt waits for its ack before the datagram is
+/// presumed lost and re-sent. Kept well under `ANNOUNCE_BUDGET` so a single
+/// drop still leaves room for a retry.
+const ANNOUNCE_RETRY_WAIT: Duration = Duration::from_millis(750);
+const ANNOUNCE_ATTEMPTS: usize = 3;
 
 pub const DEFAULT_ROUTERS: &[&str] = &[
     "router.bittorrent.com:6881",
@@ -551,7 +556,7 @@ impl Dht {
             while Instant::now() < deadline {
                 self.sweep(&mut queried);
                 match self.collect_one(&mut queried, &mut peers, want_peers) {
-                    Ok(()) => {}
+                    Ok(_) => {}
                     Err(_) => break,
                 }
                 if want_peers && !peers.is_empty() {
@@ -610,23 +615,23 @@ impl Dht {
     }
 
     /// Read one datagram. If it completes a known transaction, its nodes/
-    /// tokens/peers land in the shared state and the transaction id is
-    /// returned. Timeouts and noise are Ok(()).
+    /// tokens/peers land in the shared state and that transaction id is
+    /// returned. Timeouts and noise are `Ok(None)`.
     fn collect_one(
         &self,
         queried: &mut HashSet<(IpAddr, u16)>,
         peers: &mut Vec<SocketAddr>,
         want_peers: bool,
-    ) -> Result<()> {
+    ) -> Result<Option<u16>> {
         let mut buffer = vec![0u8; MAX_PACKET];
         let Ok((length, from)) = self.socket.recv_from(&mut buffer) else {
-            return Ok(()); // timeout: the sweep decides whether retries remain
+            return Ok(None); // timeout: the sweep decides whether retries remain
         };
         let Ok(datagram) = decode_datagram(&buffer[..length]) else {
-            return Ok(()); // not ours / corrupt: noise
+            return Ok(None); // not ours / corrupt: noise
         };
         let Some(frame) = datagram.transaction.as_chunks::<2>().0.first() else {
-            return Ok(());
+            return Ok(None);
         };
         let transaction = u16::from_be_bytes(*frame);
 
@@ -637,7 +642,7 @@ impl Dht {
             .iter()
             .any(|request| request.transaction == transaction);
         if !known {
-            return Ok(()); // stale reply from a previous search
+            return Ok(None); // stale reply from a previous search
         }
         self.outstanding
             .lock()
@@ -673,12 +678,12 @@ impl Dht {
                     }
                     Body::Ack => {}
                 }
-                Ok(())
+                Ok(Some(transaction))
             }
             Content::Error { code, message } => Err(Error::Dht(format!(
                 "node {from} answered {code}: {message}"
             ))),
-            Content::Query(_) => Ok(()), // we do not service inbound queries
+            Content::Query(_) => Ok(None), // we do not service inbound queries
         }
     }
 
@@ -697,7 +702,9 @@ impl Dht {
     }
 
     /// Announce oneself to the token-bearing nodes nearest the torrent.
-    /// Best effort: one try per node, ack awaited briefly; acked count returned.
+    /// Best effort, but not one-shot: UDP drops quietly and the ack is the
+    /// only proof a node recorded us, so a node that stays silent for a full
+    /// retry window gets the datagram again. Acked count returned.
     pub fn announce(&self, info_hash: NodeId, port: u16) -> usize {
         let holders: Vec<(NodeId, SocketAddr)> = {
             let tokens = self.tokens.lock().unwrap();
@@ -712,55 +719,58 @@ impl Dht {
         let deadline = Instant::now() + ANNOUNCE_BUDGET;
         let mut acknowledged = 0;
         for (node, address) in holders {
-            if Instant::now() >= deadline {
-                break;
-            }
             let Some(token) = self.tokens.lock().unwrap().get(&node).cloned() else {
                 continue;
             };
-            let transaction: u16 = rand::thread_rng().gen();
-            if self
-                .ask(
-                    &Query::AnnouncePeer {
-                        info_hash,
-                        port,
-                        token,
-                    },
-                    address,
-                    transaction,
-                )
-                .is_err()
-            {
-                continue;
-            }
-            if self.await_ack(transaction, deadline) {
-                acknowledged += 1;
+            for _ in 0..ANNOUNCE_ATTEMPTS {
+                let now = Instant::now();
+                if now >= deadline {
+                    break;
+                }
+                let transaction: u16 = rand::thread_rng().gen();
+                if self
+                    .ask(
+                        &Query::AnnouncePeer {
+                            info_hash,
+                            port,
+                            token: token.clone(),
+                        },
+                        address,
+                        transaction,
+                    )
+                    .is_err()
+                {
+                    break;
+                }
+                let attempt_deadline = (now + ANNOUNCE_RETRY_WAIT).min(deadline);
+                if self.await_ack(transaction, attempt_deadline) {
+                    acknowledged += 1;
+                    break;
+                }
             }
         }
         acknowledged
     }
 
-    /// Wait for the announce ack; a reply for a *different* outstanding
-    /// transaction is still consumed (routing stays warm), but the answer is
-    /// true only for the one asked.
+    /// Wait for one announcement's ack. Only a reply matched to *this*
+    /// transaction counts: traffic for other transactions is consumed
+    /// (routing stays warm) but proves nothing. A timeout leaves the announce
+    /// unacknowledged, so the caller can re-send it.
     fn await_ack(&self, transaction: u16, deadline: Instant) -> bool {
         let mut queried: HashSet<(IpAddr, u16)> = HashSet::new();
         let mut await_peers: Vec<SocketAddr> = Vec::new();
         while Instant::now() < deadline {
-            let settled = !self
-                .outstanding
-                .lock()
-                .unwrap()
-                .iter()
-                .any(|request| request.transaction == transaction);
-            if settled {
-                return true;
-            }
             match self.collect_one(&mut queried, &mut await_peers, false) {
-                Ok(()) => {}
-                Err(_) => return false,
+                Ok(Some(answered)) if answered == transaction => return true,
+                Ok(_) => {}
+                Err(_) => break,
             }
         }
+        // Give up on this attempt; a late ack must not answer a later one.
+        self.outstanding
+            .lock()
+            .unwrap()
+            .retain(|request| request.transaction != transaction);
         false
     }
 }
@@ -959,9 +969,11 @@ mod tests {
         stop: Arc<AtomicBool>,
         peer_port: u16,
         announced: Arc<Mutex<Option<u16>>>,
+        drop_first_announce: bool,
     ) {
         let id = [2u8; 20];
         let mut buffer = vec![0u8; MAX_PACKET];
+        let mut announces = 0usize;
         let _ = socket.set_read_timeout(Some(Duration::from_millis(100)));
         while !stop.load(Ordering::Relaxed) {
             let Ok((length, from)) = socket.recv_from(&mut buffer) else {
@@ -993,6 +1005,11 @@ mod tests {
                     let _ = socket.send_to(&reply, from);
                 }
                 Content::Query(Query::AnnouncePeer { port, token, .. }) => {
+                    // Simulate a lossy link: the first announce never arrives.
+                    announces += 1;
+                    if drop_first_announce && announces == 1 {
+                        continue;
+                    }
                     if token == expected_token {
                         *announced.lock().unwrap() = Some(port);
                         let reply = response_packet(&datagram.transaction, &id, &[], None);
@@ -1011,10 +1028,11 @@ mod tests {
         }
     }
 
-    /// Router steers us to the peer node; the peer node hands the torrent's
-    /// only peer over with a token, and the token lets us announce back.
-    #[test]
-    fn hunts_peers_through_the_router_chain_then_announces() {
+    /// Run the router → holder chain end to end: bootstrap, hunt, announce.
+    /// `drop_first_announce` makes the holder swallow the first announce
+    /// datagram, which is what a dropped UDP packet looks like to the client.
+    /// Returns (peers found, acked count, port the holder recorded).
+    fn hunt_and_announce(drop_first_announce: bool) -> (Vec<SocketAddr>, usize, Option<u16>) {
         let info_hash = [5u8; 20];
         let peer_node_id = [2u8; 20];
 
@@ -1038,7 +1056,9 @@ mod tests {
         let peer_thread = {
             let stop = stop.clone();
             let announced = announced.clone();
-            std::thread::spawn(move || fake_peer(peer_sock, stop, peer_port, announced))
+            std::thread::spawn(move || {
+                fake_peer(peer_sock, stop, peer_port, announced, drop_first_announce)
+            })
         };
 
         // Bootstrap: the router's find_node reply introduces the peer node.
@@ -1047,20 +1067,46 @@ mod tests {
         assert_eq!(client.table_size(), 2, "router steered us to the peer node");
 
         let peers = client.peer_hunt(info_hash, 10, Duration::from_secs(3));
-        assert_eq!(peers, vec![SocketAddr::from(([127, 0, 0, 1], peer_port))]);
-
-        // Both token-holding nodes acknowledge the announce; the holder
-        // validates its token and records the port.
         let acked = client.announce(info_hash, peer_port);
-        assert_eq!(acked, 2, "router and holder both acknowledged");
-        assert_eq!(
-            *announced.lock().unwrap(),
-            Some(peer_port),
-            "holder validated the announce token"
-        );
 
         stop.store(true, Ordering::Relaxed);
         let _ = router_thread.join();
         let _ = peer_thread.join();
+        let recorded = *announced.lock().unwrap();
+        (peers, acked, recorded)
+    }
+
+    /// Router steers us to the peer node; the peer node hands the torrent's
+    /// only peer over with a token, and the token lets us announce back.
+    #[test]
+    fn hunts_peers_through_the_router_chain_then_announces() {
+        let (peers, acked, recorded) = hunt_and_announce(false);
+        assert_eq!(peers.len(), 1);
+        let peer_port = peers[0].port();
+        assert_eq!(peers, vec![SocketAddr::from(([127, 0, 0, 1], peer_port))]);
+
+        // Both token-holding nodes acknowledge the announce; the holder
+        // validates its token and records the port.
+        assert_eq!(acked, 2, "router and holder both acknowledged");
+        assert_eq!(
+            recorded,
+            Some(peer_port),
+            "holder validated the announce token"
+        );
+    }
+
+    /// The CI flake this pins down: one dropped announce datagram used to cost
+    /// the holder's ack outright, so the count silently dropped to 1.
+    #[test]
+    fn announce_retries_after_a_dropped_datagram() {
+        let (peers, acked, recorded) = hunt_and_announce(true);
+        assert_eq!(peers.len(), 1);
+        let peer_port = peers[0].port();
+        assert_eq!(acked, 2, "the retried announce still reached the holder");
+        assert_eq!(
+            recorded,
+            Some(peer_port),
+            "holder validated the retried token"
+        );
     }
 }
