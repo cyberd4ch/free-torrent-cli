@@ -2,381 +2,123 @@
 
 # 🌀 free-torrent-cli
 
-**A lightweight, from-scratch BitTorrent client built with Node.js**
+**A lightweight, from-scratch BitTorrent client, now in Rust**
 
-![Node.js](https://img.shields.io/badge/Node.js-v18%2B-339933?style=flat-square&logo=node.js&logoColor=white)
+![Rust](https://img.shields.io/badge/Rust-1.75%2B-000000?style=flat-square&logo=rust)
 ![License](https://img.shields.io/badge/License-MIT-blue?style=flat-square)
-![Tests](https://img.shields.io/badge/Tests-76%20passing-brightgreen?style=flat-square)
-![Status](https://img.shields.io/badge/Status-Active-success?style=flat-square)
+![Tests](https://img.shields.io/badge/Tests-28%20passing-brightgreen?style=flat-square)
 
-A fully functional BitTorrent client implemented from the ground up in Node.js — no libtorrent, no shortcuts. Speaks the BitTorrent wire protocol directly, handles UDP and HTTP trackers, discovers peers via DHT, resolves magnet links, verifies every piece with SHA-1, and seeds back to the swarm while downloading.
-
-Three front ends on the same engine:
-
-| Interface | How to run |
-|---|---|
-| ⌨️ CLI (`.torrent` + magnet) | `npm run cli` |
-| 🖥️ Electron desktop app | `npm start` |
-| 🌐 Headless web UI (any browser) | `npm run server` |
+Speaks the BitTorrent wire protocol directly — no libtorrent, no shortcuts.
+Verifies every piece with SHA-1, resumes from disk, and handles multi-file
+torrents across file boundaries.
 
 </div>
 
 ---
 
-## Table of Contents
+## Status
 
-- [Features](#features)
-- [Architecture](#architecture)
-- [Quick Start](#quick-start)
-- [Usage](#usage)
-- [How It Works](#how-it-works)
-- [Project Structure](#project-structure)
-- [Running Tests](#running-tests)
-- [Planned Features](#planned-features)
-- [Known Limitations](#known-limitations)
+This is a rewrite of the original Node.js client. The protocol engine and CLI are
+ported; the front ends and peer-discovery extras are staged behind them.
 
----
+| Area | State |
+|---|---|
+| Bencode codec (with exact `info` byte-span for the info hash) | ✅ |
+| `.torrent` parsing, single and multi-file | ✅ |
+| Magnet URI parsing (hex + base32 info hashes) | ✅ |
+| Metadata exchange (BEP 9/10), so magnet-only downloads | ✅ |
+| HTTP tracker announces (compact + dictionary peers) | ✅ |
+| UDP tracker announces (BEP 15) | ✅ |
+| Peer wire protocol (handshake, bitfield, choke, request/piece) | ✅ |
+| SHA-1 piece verification, corrupt pieces re-queued | ✅ |
+| Multi-file storage mapping, directory creation | ✅ |
+| Resume: verify existing pieces on disk | ✅ |
+| Tracker re-announce / peer refill when peers run dry | ✅ |
+| CLI with live progress | ✅ |
+| DHT (BEP 5): get_peers hunting + announce | ✅ |
+| Seeding: serve verified pieces (`--seed`) | ✅ |
+| Desktop (Electron) and web UI | ⬜ not yet |
 
-## Features
+Magnet links download today, tracker or not: a trackerless magnet hunts its peers
+through the DHT (BEP 5), then announces itself to the closest nodes when done.
+And it seeds on demand: pass `--seed 60` and once the download finishes, the
+engine opens a listener and serves exactly the pieces it can re-verify on disk.
 
-### ✅ Core Protocol
-- **BitTorrent wire protocol** — full handshake, choke/unchoke, interested/not-interested, bitfield, have, request, piece, cancel messages
-- **UDP tracker protocol** — connect/announce flow per BEP 15
-- **HTTP tracker protocol** — compact peer format, binary info_hash and peer_id encoding
-- **Multi-tracker fallback** — tries all trackers in priority order (UDP first, then HTTP/HTTPS), automatically falls back to the next if one times out
-
-### ✅ Downloading
-- **Piece assembly** — accumulates 16 KiB blocks into full pieces before writing
-- **SHA-1 piece verification** — every piece is hashed and compared against torrent metadata before being written to disk. Corrupt pieces are discarded and re-requested automatically
-- **Resume support** — on restart, existing files are scanned and each piece is SHA-1 verified. Only clean, verified pieces are skipped — corrupt or partial pieces are re-downloaded
-- **Auto re-announce** — when peers run out mid-download, the client re-announces to the tracker after 10 seconds and continues with a fresh peer list
-- **Connection manager** — maintains up to 10 simultaneous peer connections, cycling through the full peer list as connections close
-
-### ✅ Multi-file Torrents
-- **Full multi-file support** — correctly maps pieces across file boundaries within a torrent's logical byte stream
-- **Automatic directory creation** — output directory structure mirrors the torrent's file tree
-- **Single-file torrents** — treated as a degenerate case of multi-file; no special handling needed at the call site
-
-### ✅ Seeding
-- **Concurrent seeding** — begins seeding immediately when downloading starts, not after completion
-- **Bitfield advertisement** — sends peers a bitfield on connect showing exactly which pieces are available
-- **Have announcements** — broadcasts `have` messages to all connected seed peers whenever a new piece is verified
-- **Upload slot management** — unchokes up to 4 peers simultaneously (tit-for-tat foundation)
-- **Request validation** — validates piece index, begin offset, and block length before reading from disk; rejects oversized requests (> 32 KiB)
-
-### ✅ Magnet Links & DHT
-- **Magnet link support** — `magnet:?xt=urn:btih:…` URIs work everywhere: hex and Base32 info hashes, any number of `tr=` trackers
-- **DHT (BEP 5)** — iterative `get_peers` lookup with XOR-distance ordering, `announce_peer` after lookup, and a full DHT node implementation (routing table, tokens, swarm maps) so we can also *serve* other DHT clients
-- **Metadata exchange (BEP 9/10)** — when there is no `.torrent` file, `ut_metadata` piece-by-piece fetch from many peers in parallel, with SHA-1 verification of the assembled info dict as the only trust anchor
+## Quick start
 
 ```bash
-# .torrent file becomes optional:
-node index.js "magnet:?xt=urn:btih:HASH&dn=name&tr=udp%3A%2F%2Ftracker.example.com%3A1337"
+cargo build --release
+./target/release/ftc ./some.torrent -o ./downloads
 ```
 
-### ✅ Headless Web UI
-- **Runs with no display** — drives the same engine on a NAS, VPS, or Raspberry Pi: `node server.js [--port 9090] [--host 127.0.0.1] [--output dir]`
-- **Live dashboard** — add torrents by magnet or `.torrent` path, watch progress/speeds/peers/ETA in any browser
-- **SSE streaming** — server-sent events push every status update; no polling, no WebSocket dependency
-- **JSON API** — `GET /api/torrents`, `POST /api/add`, `POST /api/remove`, `GET /api/events`
+```
+USAGE:
+    ftc <file.torrent | magnet:?xt=urn:btih:...> [options]
 
-### ✅ CLI & UX
-- **Live progress bar** — shows percentage, downloaded bytes, download speed, upload speed, ETA, active peer counts, verified piece count, and failed piece count
-- **Coloured output** — header, status messages, and errors are colour-coded via chalk
-- **Torrent info summary** — displays name, type (single/multi-file), size, piece count, piece size, and output path before starting
-- **File listing** — multi-file torrents show each file and its size in the header
-- **Optional output directory** — specify where files are saved as a second argument
-- **Usage message** — running with no arguments prints usage and examples
+OPTIONS:
+    -o, --output <dir>    where files are written (default: current directory)
+        --peers <list>    comma-separated host:port peers, skipping the tracker
+        --max-peers <n>   simultaneous peer connections (default: 6)
+        --no-dht          skip DHT peer discovery (trackers only)
+        --seed <secs>     after finishing, serve pieces to peers for <secs>s
+```
 
-### ✅ GUI (Electron)
-- **Full desktop app** — pick `.torrent` files through native dialogs, choose the output directory, add multiple torrents at once
-- **Live dashboard** — per-torrent cards with progress, down/up speed, peer counts, ETA, and verified/failed piece counts
-- **Concurrent downloads** — the main process runs one engine instance per torrent in parallel
-- **Seeding state** — completed torrents switch to seed mode and keep serving peers
-- **Show in Finder/Explorer** — jump straight to the downloaded files
-- **Secure IPC** — context-isolated renderer with a minimal `contextBridge` preload API
+Progress is printed in place:
 
----
+```
+[██████████████░░░░░░░░░░░░░░░░]  47%  9/19  1.8 MiB/s  4 peers
+```
 
 ## Architecture
 
 ```
-free-torrent-cli/
-├── index.js              CLI entry point — parses args (or magnet), starts download
-├── server.js             Headless web server — HTTP + REST API + SSE streaming
-├── electron/
-│   ├── main.js           Electron main process — window, IPC, download engine
-│   └── preload.cjs       Secure renderer bridge (contextBridge)
-├── renderer/             Electron GUI markup + logic
-├── web/                  Headless web dashboard (HTML + JS)
-└── src/
-    ├── TorrentParser.js  Bencode decoding, info hash, size calculation
-    ├── tracker.js        UDP + HTTP tracker protocols, multi-tracker fallback
-    ├── download.js       CLI download loop: peer connections, piece assembly, verification
-    ├── engine.js         Headless event-driven engine (one instance per torrent, cancellable)
-    ├── DHT.js            BEP 5 distributed hash table — client + node in one socket
-    ├── Magnet.js         Magnet URI parsing + full magnet→torrent resolution pipeline
-    ├── MetadataExchange.js  BEP 9/10 ut_metadata fetch (info dict from peers)
-    ├── FileManager.js    Multi-file layout, cross-boundary piece writes/reads
-    ├── Seeder.js         TCP server, incoming peer handling, piece serving
-    ├── Message.js        BitTorrent message builders and parser
-    ├── Pieces.js         Piece state tracking (needed / requested / received)
-    └── util.js           Peer ID generation
+crates/core     protocol engine (library)
+  bencode.rs    encoder/decoder; records the raw info-dict bytes for hashing
+  torrent.rs    metainfo parsing, piece table, file layout, sanitised paths
+  magnet.rs     magnet URIs, hex and base32 info hashes
+  tracker.rs    HTTP + UDP announces, compact peer decoding
+  dht.rs        BEP 5 peer discovery: KRPC, routing table, announce
+  peer.rs       wire framing and message codec
+  seed.rs       seeder: serve verified pieces to inbound peers
+  storage.rs    logical stream → files, piece writes, resume verification
+  session.rs    peer workers, retrying pieces, progress accounting
+crates/cli      the `ftc` binary
 ```
 
-**Data flow:**
+Design notes that differ from the Node version:
 
-```
-.torrent file
-     │
-     ▼
-TorrentParser  ──►  tracker.js  ──►  peer list
-                                          │
-                                          ▼
-                                    download.js
-                                    │         │
-                                    ▼         ▼
-                              FileManager   Seeder
-                              (writes)    (serves)
-                                    │
-                                    ▼
-                              Pieces (SHA-1 verified)
-```
+- **Info hash correctness.** The hash is computed over the original `info` dictionary
+  bytes, not a re-encoded value, so unusual key ordering cannot change the torrent identity.
+- **Path safety.** Torrent paths are rejected if any component is `..`, absolute, or
+  contains a separator; a hostile `.torrent` cannot write outside the output directory.
+- **Bounded frames.** Peer frames are capped at 2 MiB before allocation, so a malicious
+  length header cannot exhaust memory.
+- **DHT as a client.** The node discovers and announces but does not service inbound
+  queries yet; a get_peers token is kept from any node that hands one, values or not —
+  the closest nodes for a torrent usually do not hold values themselves.
+- **The seeder lies about nothing.** The Bitfield is built once from
+  `verify_existing`, so a half-downloaded directory seeds only what actually
+  verifies; a request outside that set disconnects the peer instead of guessing.
+- **Fail fast, retry narrowly.** A piece that fails SHA-1 goes back on the queue; a peer
+  that misbehaves is dropped. The run fails only after four refill attempts.
 
----
-
-## Quick Start
-
-### Option 1 — Download the desktop app (easiest)
-
-Grab a prebuilt installer from [GitHub Releases](https://github.com/cyberd4ch/free-torrent-cli/releases):
-
-- **macOS** (Apple Silicon & Intel): open the `.dmg`, drag FreeTorrent to Applications
-- **Windows**: run the `.exe` installer
-- **Linux**: `chmod +x FreeTorrent-*.AppImage && ./FreeTorrent-*.AppImage` (or install the `.deb`)
-
-Installers are built automatically for every `v*` tag by GitHub Actions.
-
-### Option 2 — Electron desktop app from source
-
-**Prerequisites:** Node.js v18 or higher
+## Testing
 
 ```bash
-git clone https://github.com/cyberd4ch/free-torrent-cli.git
-cd free-torrent-cli
-npm install
-npm start
+cargo test --all
+cargo clippy --all-targets -- -D warnings
+cargo fmt --all -- --check
 ```
 
-### Option 3 — Headless web UI (no display needed)
-
-```bash
-git clone https://github.com/cyberd4ch/free-torrent-cli.git
-cd free-torrent-cli
-npm install
-npm run server
-# → open http://127.0.0.1:9090
-```
-
-Flags: `--port`, `--host`, `--output <dir>`. Runs on any Node 18+ machine — NAS, VPS, Raspberry Pi — and is reachable from any browser.
-
-### Option 4 — Run the CLI from source
-
-```bash
-git clone https://github.com/cyberd4ch/free-torrent-cli.git
-cd free-torrent-cli
-npm install
-node index.js <torrent-file> [output-dir]
-```
-
-**Dependencies:**
-
-| Package | Purpose |
-|---|---|
-| `bencode` | Torrent file decoding |
-| `url-parse` | UDP tracker URL parsing |
-| `chalk` | Terminal colours |
-| `cli-progress` | Live progress bar |
-
----
-
-## Usage
-
-```bash
-# Basic usage — saves to current directory
-node index.js <torrent-file>
-
-# Specify output directory
-node index.js <torrent-file> <output-dir>
-```
-
-**Examples:**
-
-```bash
-# Download a single-file torrent
-node index.js kali-linux-2026.1-installer-arm64.iso.torrent
-
-# Download to ~/Downloads
-node index.js kali-linux-2026.1-installer-arm64.iso.torrent ~/Downloads
-
-# Download a multi-file torrent
-node index.js ubuntu-22.04.torrent ~/Downloads
-```
-
-**Example output:**
-
-```
-  free-torrent-cli
-  ─────────────────────────────────────────────
-  Name   : kali-linux-2026.1-installer-arm64.iso
-  Type   : Single-file
-  Size   : 3967.46 MB
-  Pieces : 15135 × 256 KiB
-  Output : /Users/you/Downloads
-  ─────────────────────────────────────────────
-
-  Checking for existing progress... resumed 412/15135 pieces verified ✓
-
-  ████░░░░░░░░░░░░░░░░░░ 14.2%
-  ↓ 1.4 MB/s  ↑ 230 KB/s  |  562.3 MB/3967.46 MB  |  ETA 42m 10s  |  Peers ↓8 ↑2  |  ✓ 412  ✗ 0
-
-  ✓ Download complete!
-  Elapsed  : 48m 22s
-  Downloaded: 3967.46 MB
-  Uploaded  : 142.3 MB
-  Verified  : 15135 pieces
-  Bad pieces: 3 (re-requested)
-
-  Switching to seed mode... (Ctrl+C to stop)
-```
-
----
-
-## How It Works
-
-### Tracker Communication
-The client collects all tracker URLs from the torrent's `announce` and `announce-list` fields. UDP trackers are tried first (faster, lower overhead), followed by HTTP/HTTPS trackers. Each tracker gets a 5-second timeout before the next is tried. After a successful announce, the client receives a compact peer list and begins connecting.
-
-### Peer Connections
-The client maintains up to 10 simultaneous outbound connections. For each peer it:
-1. Sends a handshake with the info hash and peer ID
-2. Sends `interested`
-3. Waits for `unchoke`
-4. Reads the peer's `bitfield` or `have` messages to know which pieces it has
-5. Requests pieces in 16 KiB blocks
-
-### Piece Verification
-Blocks from a peer are accumulated in memory into a full piece buffer. When the last block of a piece arrives, the entire piece is SHA-1 hashed and compared against the hash stored in the torrent metadata. If the hash matches, the piece is written to disk via `FileManager`. If not, it is silently discarded and re-queued.
-
-### Multi-file Layout
-BitTorrent treats a multi-file torrent as a single contiguous byte stream. `FileManager` maps this stream to actual files on disk. When writing or reading a piece that spans two files, it splits the operation correctly across both file descriptors.
-
-### Seeding
-`Seeder` runs a TCP server on port 6881 in parallel with the download. When a peer connects it validates the handshake info hash, sends back our handshake and bitfield, then waits for `interested`. Interested peers are unchoked (up to 4 at a time) and their `request` messages are served by reading the requested piece from disk and sending a `piece` message back.
-
----
-
-## Project Structure
-
-```
-free-torrent-cli/
-├── index.js              CLI entry point — parses args, opens torrent, starts download
-├── electron/
-│   ├── main.js           Main process — window, IPC, per-torrent download engine
-│   └── preload.cjs       Secure renderer bridge (contextBridge)
-├── renderer/
-│   ├── index.html        GUI markup
-│   └── app.js            GUI logic
-├── src/
-│   ├── TorrentParser.js
-│   ├── tracker.js
-│   ├── download.js
-│   ├── FileManager.js
-│   ├── Seeder.js
-│   ├── Message.js
-│   ├── Pieces.js
-│   └── util.js
-├── tests/
-│   └── run.js
-├── docs/                 GitHub Pages site
-├── .github/workflows/    CI — tests.yml, release.yml (build + Release + Pages)
-├── package.json
-├── README.md
-└── LICENSE
-```
-
----
-
-## Running Tests
-
-```bash
-npm test
-```
-
-The test suite covers all modules with 55 unit tests and requires no network access or real torrent files — all I/O is performed against temporary files and in-memory mocks.
-
-```
-── util.js ──────────────────────────────────  3 tests
-── TorrentParser.js ─────────────────────────  5 tests
-── tracker.js ───────────────────────────────  11 tests
-── Message.js ───────────────────────────────  16 tests
-── Pieces.js ────────────────────────────────  7 tests
-── FileManager.js ───────────────────────────  7 tests
-── Seeder.js ────────────────────────────────  5 tests
-                                    ──────────────────
-                                    55 passed, 0 failed
-```
-
----
+The suite includes end-to-end tests: a fake peer on localhost serves a real torrent and
+the session downloads, verifies and writes it, a fake router → holder chain over
+UDP exercises a full DHT hunt and a token-validated announce, and a fake leecher
+downloads one block from the seeder and is dropped for asking beyond the torrent.
 
 ## Roadmap
 
-Work is phased roughly in this order:
-
-1. **Distribution & CI** *(done)* — automated tests on every push/PR, cross-platform installers + GitHub Releases on `v*` tags, GitHub Pages site
-2. **Magnet links** *(done)* — DHT (BEP 5) + metadata exchange (BEP 9/10)
-3. **Headless web UI** *(done)* — `npm run server` + browser dashboard over SSE/REST
-4. **Speed & protocol hardening** — robust tit-for-tat choking, request pipelining, protocol encryption
-
-### 🔵 Robust Choking Algorithm (Phase 4)
-Magnet links are the dominant way torrents are shared today — no `.torrent` file needed. Implementing this requires two components:
-
-- **DHT (Distributed Hash Table)** — BEP 5. A decentralised peer discovery mechanism that finds peers using only an info hash, without relying on a tracker. Involves implementing a Kademlia-based routing table, `find_node` and `get_peers` UDP queries, and maintaining a bucket of known DHT nodes.
-- **Metadata extension** — BEP 9 + BEP 10. Once peers are found via DHT, the torrent metadata (the `info` dictionary) is fetched directly from peers using the extension protocol. This replaces the `.torrent` file entirely.
-
-```bash
-# Target usage
-node index.js "magnet:?xt=urn:btih:HASH&dn=name&tr=..."
-```
-
-### 🔵 Robust Choking Algorithm
-The current seeder uses a simple fixed-slot unchoke (4 peers). A full tit-for-tat implementation per BEP 3 would include:
-
-- **Download-rate based unchoking** — rank leeching peers by how fast they are uploading to us; unchoke the top N
-- **Optimistic unchoke** — every 30 seconds, randomly unchoke one additional peer regardless of upload rate, giving new peers a chance to prove themselves
-- **Anti-snubbing** — if a peer hasn't sent us a piece in 60 seconds despite being unchoked, consider them snubbed and replace them
-- **Seeding mode** — when fully seeded, switch ranking criterion from download rate to upload rate (reward peers who help the swarm)
-
-This significantly improves download speed in practice by incentivising peers to upload to you in return.
-
----
-
-## Known Limitations
-
-- **Basic choking** — fixed 4-slot unchoke without rate-based ranking (planned, see roadmap)
-- **UDP often blocked** — many networks block outbound UDP; the client falls back to HTTP trackers automatically, and DHT peer discovery is affected too
-- **No encryption** — BitTorrent protocol encryption (MSE/PE) is not implemented; some ISPs throttle unencrypted BitTorrent traffic
-- **Single piece pipeline** — requests one piece per peer at a time; pipelining multiple requests would improve throughput
-- **No persistence** — the web server keeps its torrent list in memory; restarts need re-adding (resume of partially downloaded data works)
-
----
+1. A local HTTP API, then the web and desktop front ends on top of it.
 
 ## License
 
-MIT — see [LICENSE](LICENSE) for details.
-
----
-
-<div align="center">
-Built from scratch with Node.js · No libtorrent · No shortcuts
-</div>
+MIT
