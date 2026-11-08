@@ -25,9 +25,11 @@ try {
 
     $sums = Join-Path $tmp 'SHA256SUMS'
     Invoke-WebRequest -Uri "$base/SHA256SUMS" -OutFile $sums -UseBasicParsing
-    $expected = (Select-String -Path $sums -Pattern ([regex]::Escape($asset) + '$') -SimpleMatch:$false).Line.Split()[0]
+    $line = @(Select-String -Path $sums -Pattern ([regex]::Escape($asset) + '$')).Line
+    if (-not $line) { throw "SHA256SUMS has no entry for $asset" }
+    $expected = $line.Split()[0]
     $actual = (Get-FileHash -Algorithm SHA256 -Path $zip).Hash.ToLower()
-    if ($expected -and $expected -ne $actual) { throw "checksum mismatch for $asset" }
+    if ($expected -ne $actual) { throw "checksum mismatch for $asset" }
     Write-Host '-> sha256 ok'
 
     Expand-Archive -Path $zip -DestinationPath $tmp -Force

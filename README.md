@@ -38,7 +38,7 @@ irm https://raw.githubusercontent.com/cyberd4ch/free-torrent-cli/main/install.ps
 
 ### Or grab an archive
 
-Archieves, not bare binaries, and that is deliberate: an executable downloaded as
+Archives, not bare binaries — and that is deliberate. An executable downloaded as
 a plain file loses its permission bits, so macOS and Linux hand you something that
 double-clicks into a text editor showing megabytes of binary.
 
