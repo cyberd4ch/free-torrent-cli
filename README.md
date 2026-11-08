@@ -51,7 +51,7 @@ double-clicks into a text editor showing megabytes of binary.
 
 | Platform | Archive | Size |
 | :--- | :--- | ---: |
-| **macOS** app (Apple silicon) | [`ftc-macos-app.zip`](https://github.com/cyberd4ch/free-torrent-cli/releases/latest/download/ftc-macos-app.zip) | 2.2 MB |
+| **macOS** app (Apple silicon) | [`ftc-macos-app.zip`](https://github.com/cyberd4ch/free-torrent-cli/releases/latest/download/ftc-macos-app.zip) | 1.4 MB |
 | **macOS** Apple silicon | [`ftc-macos-arm64.tar.gz`](https://github.com/cyberd4ch/free-torrent-cli/releases/latest/download/ftc-macos-arm64.tar.gz) | 1.3 MB |
 | **macOS** Intel | [`ftc-macos-x86_64.tar.gz`](https://github.com/cyberd4ch/free-torrent-cli/releases/latest/download/ftc-macos-x86_64.tar.gz) | 1.4 MB |
 | **Linux** x86_64 | [`ftc-linux-x86_64.tar.gz`](https://github.com/cyberd4ch/free-torrent-cli/releases/latest/download/ftc-linux-x86_64.tar.gz) | 1.4 MB |
