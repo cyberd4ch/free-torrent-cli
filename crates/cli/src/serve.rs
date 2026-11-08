@@ -536,20 +536,16 @@ fn reveal(state: &Arc<State>, body: &str) -> (u16, &'static str, Vec<u8>) {
 
 fn open_path(path: &Path) -> io::Result<()> {
     use std::process::Command;
-    let dir = if path.is_dir() {
-        path.to_path_buf()
-    } else {
-        path.parent()
-            .map(Path::to_path_buf)
-            .unwrap_or_else(|| path.to_path_buf())
-    };
+    // `open` and `explorer` take the path itself; xdg-open wants the folder, so
+    // the fallback is computed only in the branch that uses it (Windows clippy
+    // rightly called the shared version an unused variable).
     #[cfg(target_os = "macos")]
     let mut command = {
         let mut command = Command::new("open");
         if path.is_file() {
             command.arg("-R").arg(path);
         } else {
-            command.arg(&dir);
+            command.arg(path);
         }
         command
     };
@@ -561,6 +557,13 @@ fn open_path(path: &Path) -> io::Result<()> {
     };
     #[cfg(not(any(target_os = "macos", target_os = "windows")))]
     let mut command = {
+        let dir = if path.is_dir() {
+            path.to_path_buf()
+        } else {
+            path.parent()
+                .map(Path::to_path_buf)
+                .unwrap_or_else(|| path.to_path_buf())
+        };
         let mut command = Command::new("xdg-open");
         command.arg(&dir);
         command
