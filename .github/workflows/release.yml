@@ -34,15 +34,23 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Build
         run: cargo build --release --target ${{ matrix.target }} -p free-torrent-cli
+      # Archives, never a bare binary: a raw download loses the executable bit, so
+      # macOS and Linux hand the user a file that double-clicks into a text editor.
       - name: Package
         shell: bash
         run: |
-          mkdir -p dist
-          bin=target/${{ matrix.target }}/release/ftc
-          if [ "${{ runner.os }}" = "Windows" ]; then bin="$bin.exe"; fi
-          out="dist/ftc-${{ matrix.name }}"
-          if [ "${{ runner.os }}" = "Windows" ]; then out="$out.exe"; fi
-          cp "$bin" "$out"
+          set -euo pipefail
+          mkdir -p dist stage
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            cp "target/${{ matrix.target }}/release/ftc.exe" stage/ftc.exe
+            powershell -NoProfile -Command \
+              "Compress-Archive -Path stage/ftc.exe -DestinationPath dist/ftc-${{ matrix.name }}.zip -Force"
+          else
+            cp "target/${{ matrix.target }}/release/ftc" stage/ftc
+            chmod 755 stage/ftc
+            tar -czf "dist/ftc-${{ matrix.name }}.tar.gz" -C stage ftc
+          fi
+          ls -l dist
       - uses: actions/upload-artifact@v4
         with:
           name: ftc-${{ matrix.name }}
@@ -60,14 +68,14 @@ jobs:
       - name: Checksums
         working-directory: dist
         run: |
-          chmod +x ftc-* || true
-          sha256sum ftc-* > SHA256SUMS
+          sha256sum ftc-*.tar.gz ftc-*.zip > SHA256SUMS
           cat SHA256SUMS
       - name: Publish the GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            dist/ftc-*
+            dist/ftc-*.tar.gz
+            dist/ftc-*.zip
             dist/SHA256SUMS
           generate_release_notes: true
           fail_on_unmatched_files: true

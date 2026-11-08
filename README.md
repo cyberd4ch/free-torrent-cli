@@ -20,16 +20,44 @@ delegated to a C library, and nothing is downloaded at install time.
 
 ---
 
-## Download
+## Install
 
-Prebuilt, static executables. Pick your platform, no toolchain required:
+```bash
+curl -fsSL https://raw.githubusercontent.com/cyberd4ch/free-torrent-cli/main/install.sh | sh
+```
 
-| Platform | Binary | Size |
+Detects macOS or Linux and the CPU, downloads the matching archive, checks it
+against `SHA256SUMS`, and puts `ftc` on your PATH — `/usr/local/bin` when that is
+writable, `~/.local/bin` otherwise. No toolchain, no runtime, no sudo unless you
+ask for it.
+
+```powershell
+# Windows, in PowerShell
+irm https://raw.githubusercontent.com/cyberd4ch/free-torrent-cli/main/install.ps1 | iex
+```
+
+### Or grab an archive
+
+Archieves, not bare binaries, and that is deliberate: an executable downloaded as
+a plain file loses its permission bits, so macOS and Linux hand you something that
+double-clicks into a text editor showing megabytes of binary.
+
+| Platform | Archive | Size |
 | :--- | :--- | ---: |
-| **Linux** x86_64 | [`ftc-linux-x86_64`](https://github.com/cyberd4ch/free-torrent-cli/releases/latest/download/ftc-linux-x86_64) | 3.4 MB |
-| **macOS** Apple silicon | [`ftc-macos-arm64`](https://github.com/cyberd4ch/free-torrent-cli/releases/latest/download/ftc-macos-arm64) | 2.9 MB |
-| **macOS** Intel | [`ftc-macos-x86_64`](https://github.com/cyberd4ch/free-torrent-cli/releases/latest/download/ftc-macos-x86_64) | 3.0 MB |
-| **Windows** x86_64 | [`ftc-windows-x86_64.exe`](https://github.com/cyberd4ch/free-torrent-cli/releases/latest/download/ftc-windows-x86_64.exe) | 2.4 MB |
+| **macOS** Apple silicon | [`ftc-macos-arm64.tar.gz`](https://github.com/cyberd4ch/free-torrent-cli/releases/latest/download/ftc-macos-arm64.tar.gz) | 1.3 MB |
+| **macOS** Intel | [`ftc-macos-x86_64.tar.gz`](https://github.com/cyberd4ch/free-torrent-cli/releases/latest/download/ftc-macos-x86_64.tar.gz) | 1.3 MB |
+| **Linux** x86_64 | [`ftc-linux-x86_64.tar.gz`](https://github.com/cyberd4ch/free-torrent-cli/releases/latest/download/ftc-linux-x86_64.tar.gz) | 1.4 MB |
+| **Windows** x86_64 | [`ftc-windows-x86_64.zip`](https://github.com/cyberd4ch/free-torrent-cli/releases/latest/download/ftc-windows-x86_64.zip) | 1.1 MB |
+
+```bash
+tar xzf ftc-macos-arm64.tar.gz      # ftc arrives as mode 0755
+./ftc --version
+```
+
+```powershell
+Expand-Archive ftc-windows-x86_64.zip -DestinationPath .
+.\ftc.exe --version
+```
 
 Every release also ships [`SHA256SUMS`](https://github.com/cyberd4ch/free-torrent-cli/releases/latest/download/SHA256SUMS).
 Verify before you run it:
@@ -37,24 +65,6 @@ Verify before you run it:
 ```bash
 curl -LO https://github.com/cyberd4ch/free-torrent-cli/releases/latest/download/SHA256SUMS
 shasum -a 256 -c SHA256SUMS --ignore-missing      # linux: sha256sum -c
-```
-
-### Install in one line
-
-```bash
-# macOS (Apple silicon)
-curl -L -o ftc https://github.com/cyberd4ch/free-torrent-cli/releases/latest/download/ftc-macos-arm64 \
-  && chmod +x ftc && sudo mv ftc /usr/local/bin/
-
-# Linux (x86_64)
-curl -L -o ftc https://github.com/cyberd4ch/free-torrent-cli/releases/latest/download/ftc-linux-x86_64 \
-  && chmod +x ftc && sudo mv ftc /usr/local/bin/
-```
-
-```powershell
-# Windows (PowerShell)
-curl.exe -Lo ftc.exe https://github.com/cyberd4ch/free-torrent-cli/releases/latest/download/ftc-windows-x86_64.exe
-.\ftc.exe --version
 ```
 
 ## Use

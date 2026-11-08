@@ -822,8 +822,8 @@
         </div>
 
         <div class="hero-oneshot">
-            <span class="pill">macOS ARM</span>
-            <code>curl -L -o ftc https://github.com/cyberd4ch/free-torrent-cli/releases/latest/download/ftc-macos-arm64 &amp;&amp; chmod +x ftc</code>
+            <span class="pill">macOS · Linux</span>
+            <code>curl -fsSL https://raw.githubusercontent.com/cyberd4ch/free-torrent-cli/main/install.sh | sh</code>
         </div>
 
         <div class="hero-stats">
@@ -854,8 +854,9 @@
         <div class="section-label">// get it</div>
         <h2 class="section-title">Download</h2>
         <p class="section-sub">
-            One file per platform, straight from the release. No installer, no account,
-            no sign-up — download it, <code>chmod +x</code>, run it.
+            One archive per platform, straight from the release. No account, no sign-up.
+            Extract it and run — the binary inside keeps its executable bit, which a bare
+            download never does (that is the file that opens as 3 MB of text).
         </p>
 
         <div class="platform-grid">
@@ -871,26 +872,26 @@
                 </div>
                 <div class="platform-downloads">
                     <a class="download-btn"
-                        href="https://github.com/cyberd4ch/free-torrent-cli/releases/latest/download/ftc-macos-arm64">
+                        href="https://github.com/cyberd4ch/free-torrent-cli/releases/latest/download/ftc-macos-arm64.tar.gz">
                         <span class="download-btn-label">
                             <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
                                 <path
                                     d="M8 0a8 8 0 100 16A8 8 0 008 0zm3.5 7.5l-3 3a.75.75 0 01-1.06 0l-3-3a.75.75 0 011.06-1.06L7 7.94V3.75a.75.75 0 011.5 0v4.19l1.5-1.5a.75.75 0 011.5 1.06z" />
                             </svg>
-                            ftc-macos-arm64
+                            ftc-macos-arm64.tar.gz
                         </span>
-                        <span class="download-btn-size">2.9 MB</span>
+                        <span class="download-btn-size">1.3 MB</span>
                     </a>
                     <a class="download-btn"
-                        href="https://github.com/cyberd4ch/free-torrent-cli/releases/latest/download/ftc-macos-x86_64">
+                        href="https://github.com/cyberd4ch/free-torrent-cli/releases/latest/download/ftc-macos-x86_64.tar.gz">
                         <span class="download-btn-label">
                             <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
                                 <path
                                     d="M8 0a8 8 0 100 16A8 8 0 008 0zm3.5 7.5l-3 3a.75.75 0 01-1.06 0l-3-3a.75.75 0 011.06-1.06L7 7.94V3.75a.75.75 0 011.5 0v4.19l1.5-1.5a.75.75 0 011.5 1.06z" />
                             </svg>
-                            ftc-macos-x86_64
+                            ftc-macos-x86_64.tar.gz
                         </span>
-                        <span class="download-btn-size">3.0 MB</span>
+                        <span class="download-btn-size">1.3 MB</span>
                     </a>
                 </div>
             </div>
@@ -906,15 +907,15 @@
                 </div>
                 <div class="platform-downloads">
                     <a class="download-btn"
-                        href="https://github.com/cyberd4ch/free-torrent-cli/releases/latest/download/ftc-windows-x86_64.exe">
+                        href="https://github.com/cyberd4ch/free-torrent-cli/releases/latest/download/ftc-windows-x86_64.zip">
                         <span class="download-btn-label">
                             <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
                                 <path
                                     d="M8 0a8 8 0 100 16A8 8 0 008 0zm3.5 7.5l-3 3a.75.75 0 01-1.06 0l-3-3a.75.75 0 011.06-1.06L7 7.94V3.75a.75.75 0 011.5 0v4.19l1.5-1.5a.75.75 0 011.5 1.06z" />
                             </svg>
-                            ftc-windows-x86_64.exe
+                            ftc-windows-x86_64.zip
                         </span>
-                        <span class="download-btn-size">2.4 MB</span>
+                        <span class="download-btn-size">1.1 MB</span>
                     </a>
                 </div>
             </div>
@@ -930,15 +931,15 @@
                 </div>
                 <div class="platform-downloads">
                     <a class="download-btn"
-                        href="https://github.com/cyberd4ch/free-torrent-cli/releases/latest/download/ftc-linux-x86_64">
+                        href="https://github.com/cyberd4ch/free-torrent-cli/releases/latest/download/ftc-linux-x86_64.tar.gz">
                         <span class="download-btn-label">
                             <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
                                 <path
                                     d="M8 0a8 8 0 100 16A8 8 0 008 0zm3.5 7.5l-3 3a.75.75 0 01-1.06 0l-3-3a.75.75 0 011.06-1.06L7 7.94V3.75a.75.75 0 011.5 0v4.19l1.5-1.5a.75.75 0 011.5 1.06z" />
                             </svg>
-                            ftc-linux-x86_64
+                            ftc-linux-x86_64.tar.gz
                         </span>
-                        <span class="download-btn-size">3.4 MB</span>
+                        <span class="download-btn-size">1.4 MB</span>
                     </a>
                 </div>
             </div>
@@ -973,18 +974,18 @@
                         <div class="step-num">1</div>
                         <div class="step-content">
                             <div class="step-title">Fetch the binary</div>
-                            <div class="step-desc">Apple silicon for M-series Macs; the x86_64 build runs on Intel
-                                (and on Apple silicon under Rosetta).</div>
-                            <div class="step-code">curl -L -o ftc https://github.com/cyberd4ch/free-torrent-cli/releases/latest/download/ftc-macos-arm64</div>
+                            <div class="step-desc">One line, Apple silicon or Intel. It picks the right archive,
+                                verifies the checksum and puts <code>ftc</code> on your PATH.</div>
+                            <div class="step-code">curl -fsSL https://raw.githubusercontent.com/cyberd4ch/free-torrent-cli/main/install.sh | sh</div>
                         </div>
                     </div>
                     <div class="install-step">
                         <div class="step-num">2</div>
                         <div class="step-content">
-                            <div class="step-title">Make it executable</div>
-                            <div class="step-desc">Unsigned binaries are quarantined by Gatekeeper; clearing the
-                                attribute is enough.</div>
-                            <div class="step-code">chmod +x ftc &amp;&amp; xattr -d com.apple.quarantine ftc 2&gt;/dev/null; ./ftc --version</div>
+                            <div class="step-title">Check it runs</div>
+                            <div class="step-desc">The installer clears the quarantine flag. The binary is unsigned,
+                                so macOS may still ask once — "Open Anyway" settles it.</div>
+                            <div class="step-code">ftc --version</div>
                         </div>
                     </div>
                     <div class="install-step">
@@ -1005,18 +1006,18 @@
                         <div class="step-num">1</div>
                         <div class="step-content">
                             <div class="step-title">Fetch the executable</div>
-                            <div class="step-desc">Portable — there is no installer and nothing is written outside the
-                                output directory.</div>
-                            <div class="step-code">curl.exe -Lo ftc.exe https://github.com/cyberd4ch/free-torrent-cli/releases/latest/download/ftc-windows-x86_64.exe</div>
+                            <div class="step-desc">Portable executable, no MSI. The archive is checksum-verified
+                                before it is unpacked into your user profile.</div>
+                            <div class="step-code">irm https://raw.githubusercontent.com/cyberd4ch/free-torrent-cli/main/install.ps1 | iex</div>
                         </div>
                     </div>
                     <div class="install-step">
                         <div class="step-num">2</div>
                         <div class="step-content">
-                            <div class="step-title">Check it runs</div>
-                            <div class="step-desc">SmartScreen may warn on an unsigned binary: "More info" → "Run
-                                anyway".</div>
-                            <div class="step-code">.\ftc.exe --version</div>
+                            <div class="step-title">Open a new terminal, then check it</div>
+                            <div class="step-desc">The installer appends <code>%LOCALAPPDATA%\Programs\ftc</code> to
+                                your user PATH. SmartScreen may warn on an unsigned binary: "More info" → "Run anyway".</div>
+                            <div class="step-code">ftc.exe --version</div>
                         </div>
                     </div>
                     <div class="install-step">
@@ -1034,15 +1035,18 @@
                     <div class="install-step">
                         <div class="step-num">1</div>
                         <div class="step-content">
-                            <div class="step-title">Fetch the binary</div>
-                            <div class="step-code">curl -L -o ftc https://github.com/cyberd4ch/free-torrent-cli/releases/latest/download/ftc-linux-x86_64</div>
+                            <div class="step-title">Install it</div>
+                            <div class="step-desc">x86_64 glibc. The same script handles Linux and macOS.</div>
+                            <div class="step-code">curl -fsSL https://raw.githubusercontent.com/cyberd4ch/free-torrent-cli/main/install.sh | sh</div>
                         </div>
                     </div>
                     <div class="install-step">
                         <div class="step-num">2</div>
                         <div class="step-content">
-                            <div class="step-title">Install it on your PATH</div>
-                            <div class="step-code">chmod +x ftc &amp;&amp; sudo mv ftc /usr/local/bin/ &amp;&amp; ftc --version</div>
+                            <div class="step-title">Confirm</div>
+                            <div class="step-desc">Falls back to <code>~/.local/bin</code> without sudo when
+                                <code>/usr/local/bin</code> is not writable.</div>
+                            <div class="step-code">ftc --version</div>
                         </div>
                     </div>
                     <div class="install-step">
