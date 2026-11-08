@@ -1,72 +1,68 @@
 <div align="center">
 
-# 🌀 free-torrent-cli
+# ftc
 
-**A lightweight, from-scratch BitTorrent client, now in Rust**
+### A BitTorrent client in one ~3 MB binary.
 
-![Rust](https://img.shields.io/badge/Rust-1.75%2B-000000?style=flat-square&logo=rust)
-![License](https://img.shields.io/badge/License-MIT-blue?style=flat-square)
-![Tests](https://img.shields.io/badge/Tests-37%20passing-brightgreen?style=flat-square)
+**Rust · from scratch · no libtorrent · no Electron · no runtime to install**
 
-Speaks the BitTorrent wire protocol directly — no libtorrent, no shortcuts.
-Verifies every piece with SHA-1, resumes from disk, and handles multi-file
-torrents across file boundaries.
+[![Release](https://img.shields.io/github/v/release/cyberd4ch/free-torrent-cli?style=flat-square&color=orange&label=release)](https://github.com/cyberd4ch/free-torrent-cli/releases/latest)
+[![Tests](https://img.shields.io/github/actions/workflow/status/cyberd4ch/free-torrent-cli/test.yml?style=flat-square&label=tests)](https://github.com/cyberd4ch/free-torrent-cli/actions/workflows/test.yml)
+[![License](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](LICENSE)
+![Platforms](https://img.shields.io/badge/platforms-linux%20%7C%20macOS%20%7C%20windows-000000?style=flat-square)
+![Binary](https://img.shields.io/badge/binary-~3%20MB-brightgreen?style=flat-square)
+
+It speaks the BitTorrent wire protocol itself — handshake, bencode, HTTP and UDP
+trackers, DHT, metadata exchange, SHA-1 piece verification, seeding. Nothing is
+delegated to a C library, and nothing is downloaded at install time.
 
 </div>
 
 ---
 
-## Status
+## Download
 
-This is a rewrite of the original Node.js client. The protocol engine and CLI are
-ported; the front ends and peer-discovery extras are staged behind them.
+Prebuilt, static executables. Pick your platform, no toolchain required:
 
-| Area | State |
-|---|---|
-| Bencode codec (with exact `info` byte-span for the info hash) | ✅ |
-| `.torrent` parsing, single and multi-file | ✅ |
-| Magnet URI parsing (hex + base32 info hashes) | ✅ |
-| Metadata exchange (BEP 9/10), so magnet-only downloads | ✅ |
-| HTTP tracker announces (compact + dictionary peers) | ✅ |
-| UDP tracker announces (BEP 15) | ✅ |
-| Peer wire protocol (handshake, bitfield, choke, request/piece) | ✅ |
-| SHA-1 piece verification, corrupt pieces re-queued | ✅ |
-| Multi-file storage mapping, directory creation | ✅ |
-| Resume: verify existing pieces on disk | ✅ |
-| Tracker re-announce / peer refill when peers run dry | ✅ |
-| CLI with live progress | ✅ |
-| DHT (BEP 5): get_peers hunting + announce | ✅ |
-| Seeding: serve verified pieces (`--seed`) | ✅ |
-| Desktop (Electron) and web UI | ⬜ not yet |
+| Platform | Binary | Size |
+| :--- | :--- | ---: |
+| **Linux** x86_64 | [`ftc-linux-x86_64`](https://github.com/cyberd4ch/free-torrent-cli/releases/latest/download/ftc-linux-x86_64) | 3.4 MB |
+| **macOS** Apple silicon | [`ftc-macos-arm64`](https://github.com/cyberd4ch/free-torrent-cli/releases/latest/download/ftc-macos-arm64) | 2.9 MB |
+| **macOS** Intel | [`ftc-macos-x86_64`](https://github.com/cyberd4ch/free-torrent-cli/releases/latest/download/ftc-macos-x86_64) | 3.0 MB |
+| **Windows** x86_64 | [`ftc-windows-x86_64.exe`](https://github.com/cyberd4ch/free-torrent-cli/releases/latest/download/ftc-windows-x86_64.exe) | 2.4 MB |
 
-Magnet links download today, tracker or not: a trackerless magnet hunts its peers
-through the DHT (BEP 5), then announces itself to the closest nodes when done.
-And it seeds on demand: pass `--seed 60` and once the download finishes, the
-engine opens a listener and serves exactly the pieces it can re-verify on disk.
-
-## Install
-
-Prebuilt binaries are attached to every [release](https://github.com/cyberd4ch/free-torrent-cli/releases/latest):
-`ftc-linux-x86_64`, `ftc-macos-arm64`, `ftc-macos-x86_64`, `ftc-windows-x86_64.exe`
-and a `SHA256SUMS` you can verify against.
+Every release also ships [`SHA256SUMS`](https://github.com/cyberd4ch/free-torrent-cli/releases/latest/download/SHA256SUMS).
+Verify before you run it:
 
 ```bash
-# macOS (Apple silicon) — swap the asset name for your platform
-curl -L -o ftc https://github.com/cyberd4ch/free-torrent-cli/releases/latest/download/ftc-macos-arm64
-chmod +x ftc && ./ftc --version
+curl -LO https://github.com/cyberd4ch/free-torrent-cli/releases/latest/download/SHA256SUMS
+shasum -a 256 -c SHA256SUMS --ignore-missing      # linux: sha256sum -c
 ```
 
-Or build it yourself (Rust 1.75+):
+### Install in one line
 
 ```bash
-git clone https://github.com/cyberd4ch/free-torrent-cli
-cd free-torrent-cli && cargo build --release
+# macOS (Apple silicon)
+curl -L -o ftc https://github.com/cyberd4ch/free-torrent-cli/releases/latest/download/ftc-macos-arm64 \
+  && chmod +x ftc && sudo mv ftc /usr/local/bin/
+
+# Linux (x86_64)
+curl -L -o ftc https://github.com/cyberd4ch/free-torrent-cli/releases/latest/download/ftc-linux-x86_64 \
+  && chmod +x ftc && sudo mv ftc /usr/local/bin/
 ```
 
-## Quick start
+```powershell
+# Windows (PowerShell)
+curl.exe -Lo ftc.exe https://github.com/cyberd4ch/free-torrent-cli/releases/latest/download/ftc-windows-x86_64.exe
+.\ftc.exe --version
+```
+
+## Use
 
 ```bash
-./target/release/ftc ./some.torrent -o ./downloads
+ftc ./some.torrent -o ./downloads
+ftc "magnet:?xt=urn:btih:..." -o ./downloads
+ftc ./some.torrent -o ./downloads --seed 300     # keep serving after it finishes
 ```
 
 ```
@@ -81,46 +77,83 @@ OPTIONS:
         --seed <secs>     after finishing, serve pieces to peers for <secs>s
 ```
 
-Progress is printed in place:
+Progress renders in place, no log spam:
 
 ```
 [██████████████░░░░░░░░░░░░░░░░]  47%  9/19  1.8 MiB/s  4 peers
 ```
 
-## Architecture
+A magnet with no tracker still works: it hunts peers through the DHT, fetches
+the `info` dictionary from them (BEP 9/10), and verifies it against the info
+hash before writing a single byte.
+
+## What you get for 3 MB
+
+| | |
+| :--- | :--- |
+| **No runtime.** Static binary. No Node, no Python, no JVM, no Electron download on first launch. | **No libtorrent.** Bencode, trackers, wire protocol, DHT and seeding are this repo's code. |
+| **Resumable.** Existing pieces are re-verified on disk, so a restart continues instead of redownloading. | **Honest seeding.** The Bitfield is built from verified pieces only — it never claims a piece it can't prove. |
+| **Multi-file torrents.** Crosses file boundaries without stitching buffers. | **Safe paths.** `..`, absolute paths and separators are rejected before any file is opened. |
+
+## Protocol coverage
+
+| Area | |
+| :--- | :--- |
+| Bencode codec, exact `info` byte-span for hashing | ✅ |
+| `.torrent` parsing — single and multi-file | ✅ |
+| Magnet URIs — hex and base32 info hashes | ✅ |
+| Metadata exchange (BEP 9/10) — magnet-only downloads | ✅ |
+| HTTP tracker announces — compact and dictionary peers | ✅ |
+| UDP tracker announces (BEP 15) | ✅ |
+| Peer wire protocol — handshake, bitfield, choke, request/piece | ✅ |
+| SHA-1 piece verification, corrupt pieces re-queued | ✅ |
+| Resume from disk, multi-file storage mapping | ✅ |
+| Tracker re-announce and peer refill | ✅ |
+| DHT (BEP 5) — `get_peers` hunting and announce | ✅ |
+| Seeding (`--seed`) | ✅ |
+| GUI / web front end | ⬜ planned |
+
+## How it's built
 
 ```
-crates/core     protocol engine (library)
-  bencode.rs    encoder/decoder; records the raw info-dict bytes for hashing
-  torrent.rs    metainfo parsing, piece table, file layout, sanitised paths
+crates/core     the engine, as a library
+  bencode.rs    encoder/decoder; records raw info-dict bytes for hashing
+  torrent.rs    metainfo, piece table, file layout, sanitised paths
   magnet.rs     magnet URIs, hex and base32 info hashes
   tracker.rs    HTTP + UDP announces, compact peer decoding
-  dht.rs        BEP 5 peer discovery: KRPC, routing table, announce
+  dht.rs        BEP 5: KRPC, routing table, announce
   peer.rs       wire framing and message codec
-  seed.rs       seeder: serve verified pieces to inbound peers
+  seed.rs       serve verified pieces to inbound peers
   storage.rs    logical stream → files, piece writes, resume verification
   session.rs    peer workers, retrying pieces, progress accounting
-crates/cli      the `ftc` binary
+crates/cli      the `ftc` binary — argument parsing, progress rendering
 ```
 
-Design notes that differ from the Node version:
+Six dependencies in total (`sha1`, `hex`, `rand`, `ureq`, `base32`,
+`percent-encoding`). No async runtime: a worker thread per peer.
 
-- **Info hash correctness.** The hash is computed over the original `info` dictionary
-  bytes, not a re-encoded value, so unusual key ordering cannot change the torrent identity.
-- **Path safety.** Torrent paths are rejected if any component is `..`, absolute, or
-  contains a separator; a hostile `.torrent` cannot write outside the output directory.
-- **Bounded frames.** Peer frames are capped at 2 MiB before allocation, so a malicious
-  length header cannot exhaust memory.
-- **DHT as a client.** The node discovers and announces but does not service inbound
-  queries yet; a get_peers token is kept from any node that hands one, values or not —
-  the closest nodes for a torrent usually do not hold values themselves.
-- **The seeder lies about nothing.** The Bitfield is built once from
-  `verify_existing`, so a half-downloaded directory seeds only what actually
-  verifies; a request outside that set disconnects the peer instead of guessing.
-- **Fail fast, retry narrowly.** A piece that fails SHA-1 goes back on the queue; a peer
-  that misbehaves is dropped. The run fails only after four refill attempts.
+Decisions worth knowing:
 
-## Testing
+- **The info hash is computed over the original `info` bytes**, not a re-encoded
+  dictionary, so unusual key ordering can't change a torrent's identity.
+- **Peer frames are capped at 2 MiB** before allocation; a hostile length header
+  can't exhaust memory.
+- **A bad piece goes back on the queue**, a misbehaving peer is dropped, and the
+  run fails only after four refill attempts.
+- **The seeder lies about nothing**: a request outside the verified set
+  disconnects the peer rather than guessing.
+
+## Build from source
+
+Rust 1.75+ (an MSRV-pinned `rust-toolchain.toml` is included):
+
+```bash
+git clone https://github.com/cyberd4ch/free-torrent-cli
+cd free-torrent-cli
+cargo build --release        # target/release/ftc
+```
+
+## Test
 
 ```bash
 cargo test --all
@@ -128,15 +161,15 @@ cargo clippy --all-targets -- -D warnings
 cargo fmt --all -- --check
 ```
 
-The suite includes end-to-end tests: a fake peer on localhost serves a real torrent and
-the session downloads, verifies and writes it, a fake router → holder chain over
-UDP exercises a full DHT hunt and a token-validated announce, and a fake leecher
-downloads one block from the seeder and is dropped for asking beyond the torrent.
+The suite is end-to-end where it matters: a fake peer serves a real torrent and
+the session downloads, verifies and writes it; a fake router → holder chain over
+UDP exercises a full DHT hunt and a token-validated announce; a fake leecher
+pulls one block from the seeder and is dropped for asking beyond the torrent.
 
 ## Roadmap
 
-1. A local HTTP API, then the web and desktop front ends on top of it.
+1. A local HTTP API, then web and desktop front ends on top of it.
 
 ## License
 
-MIT
+MIT — see [LICENSE](LICENSE).
