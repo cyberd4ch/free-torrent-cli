@@ -117,6 +117,7 @@ fn route(state: &Arc<State>, request: &Request) -> (u16, &'static str, Vec<u8>) 
         ("GET", "/api/settings") => (200, JSON, settings_json(state).into_bytes()),
         ("POST", "/api/settings") => change_settings(state, &request.body),
         ("POST", "/api/add") => add(state, &request.body),
+        ("POST", "/api/add-torrent") => add_torrent(state, &request.body),
         ("POST", "/api/cancel") => cancel(state, &request.body),
         ("POST", "/api/pause") => pause(state, &request.body, true),
         ("POST", "/api/resume") => pause(state, &request.body, false),
@@ -125,6 +126,7 @@ fn route(state: &Arc<State>, request: &Request) -> (u16, &'static str, Vec<u8>) 
         ("POST", "/api/reveal") => reveal(state, &request.body),
         (_, "/favicon.ico") => (200, "image/svg+xml", ICON.as_bytes().to_vec()),
         (_, "/api/add")
+        | (_, "/api/add-torrent")
         | (_, "/api/cancel")
         | (_, "/api/pause")
         | (_, "/api/resume")
@@ -258,6 +260,92 @@ fn add(state: &Arc<State>, body: &str) -> (u16, &'static str, Vec<u8>) {
         error: None,
     });
     spawn_download(state.clone(), id, target, output, limit, paused);
+    json(200, format!("{{\"id\":{id}}}"))
+}
+
+/// A `.torrent` dropped on the page: the browser cannot hand us a filesystem
+/// path, so it base64-encodes the bytes and we park them in the temp folder long
+/// enough for the worker to parse them.
+fn add_torrent(state: &Arc<State>, body: &str) -> (u16, &'static str, Vec<u8>) {
+    let form = http::form_pairs(body);
+    let (Some(name), Some(data)) = (field(&form, "name"), field(&form, "data")) else {
+        return bad("missing name or data");
+    };
+    let Some(bytes) = base64_decode(&data) else {
+        return bad("data is not base64");
+    };
+    if bytes.is_empty() {
+        return bad("the torrent is empty");
+    }
+    if bytes.len() > 8 * 1024 * 1024 {
+        return bad("the torrent is larger than 8 MB");
+    }
+
+    let settings = state.settings.lock().unwrap().clone();
+    let output = field(&form, "output")
+        .map(PathBuf::from)
+        .unwrap_or(settings.output);
+    if let Err(err) = std::fs::create_dir_all(&output) {
+        return bad(&format!("cannot create {}: {err}", output.display()));
+    }
+    let limit = match field(&form, "limit") {
+        Some(value) => match parse_rate(&value) {
+            Ok(rate) => Some(rate),
+            Err(message) => return bad(&message),
+        },
+        None => settings.limit,
+    };
+    let paused = matches!(field(&form, "paused").as_deref(), Some("1" | "true" | "on"));
+
+    let id = state.next_id.fetch_add(1, Ordering::Relaxed);
+    let safe_name: String = name
+        .chars()
+        .map(|character| {
+            if character.is_ascii_alphanumeric() || matches!(character, '.' | '-' | '_') {
+                character
+            } else {
+                '_'
+            }
+        })
+        .collect();
+    let safe_name = if safe_name.trim_matches('.').is_empty() {
+        "upload.torrent".to_string()
+    } else {
+        safe_name
+    };
+
+    let uploads = std::env::temp_dir().join("ftc-uploads");
+    if let Err(err) = std::fs::create_dir_all(&uploads) {
+        return bad(&format!("cannot store the upload: {err}"));
+    }
+    let path = uploads.join(format!("{id}-{safe_name}"));
+    if let Err(err) = std::fs::write(&path, &bytes) {
+        return bad(&format!("cannot store the upload: {err}"));
+    }
+
+    state.jobs.lock().unwrap().push(Job {
+        id,
+        target: path.display().to_string(),
+        name: String::new(),
+        output: output.clone(),
+        status: if paused { "paused" } else { "metadata" },
+        total: 0,
+        limit,
+        added: now_secs(),
+        finished: None,
+        progress: None,
+        stop: None,
+        pause: None,
+        error: None,
+    });
+    spawn_download(
+        state.clone(),
+        id,
+        path.display().to_string(),
+        output,
+        limit,
+        paused,
+    );
     json(200, format!("{{\"id\":{id}}}"))
 }
 
@@ -484,6 +572,40 @@ fn open_path(path: &Path) -> io::Result<()> {
         .map(|_| ())
 }
 
+/// Uploaded .torrent files live in the temp folder; drop the copy once parsed.
+fn remove_upload(target: &str) {
+    let uploads = std::env::temp_dir().join("ftc-uploads");
+    let path = Path::new(target);
+    if path.parent() == Some(uploads.as_path()) {
+        let _ = std::fs::remove_file(path);
+    }
+}
+
+/// Minimal standard-alphabet base64, enough for an uploaded .torrent.
+fn base64_decode(input: &str) -> Option<Vec<u8>> {
+    let mut out = Vec::with_capacity(input.len() * 3 / 4);
+    let mut buffer: u32 = 0;
+    let mut bits = 0u8;
+    for byte in input.bytes() {
+        let value = match byte {
+            b'A'..=b'Z' => byte - b'A',
+            b'a'..=b'z' => byte - b'a' + 26,
+            b'0'..=b'9' => byte - b'0' + 52,
+            b'+' => 62,
+            b'/' => 63,
+            b'=' | b'\n' | b'\r' | b' ' | b'\t' => continue,
+            _ => return None,
+        } as u32;
+        buffer = (buffer << 6) | value;
+        bits += 6;
+        if bits >= 8 {
+            bits -= 8;
+            out.push(((buffer >> bits) & 0xFF) as u8);
+        }
+    }
+    Some(out)
+}
+
 fn settings_json(state: &State) -> String {
     let settings = state.settings.lock().unwrap();
     let limit = match settings.limit {
@@ -529,7 +651,10 @@ fn spawn_download(
     start_paused: bool,
 ) {
     std::thread::spawn(move || {
-        let torrent = match resolve(&target, &state.options) {
+        let resolved = resolve(&target, &state.options);
+        // An uploaded .torrent only had to survive until it was parsed.
+        remove_upload(&target);
+        let torrent = match resolved {
             Ok(torrent) => torrent,
             Err(message) => return finish(&state, id, "error", Some(message)),
         };
@@ -1012,5 +1137,46 @@ mod tests {
         let addr = spawn();
         assert_eq!(post(addr, "/api/reveal", "id=42").status(), 404);
         assert_eq!(post(addr, "/api/reveal", "").status(), 400);
+    }
+
+    #[test]
+    fn base64_decodes_what_a_browser_sends() {
+        assert_eq!(base64_decode("aGVsbG8=").unwrap(), b"hello");
+        assert_eq!(base64_decode("aGVs\nbG8=").unwrap(), b"hello");
+        assert!(base64_decode("!!!!").is_none());
+    }
+
+    #[test]
+    fn add_torrent_needs_base64_data() {
+        let addr = spawn();
+        assert_eq!(
+            post(addr, "/api/add-torrent", "name=x.torrent").status(),
+            400
+        );
+        let bad = post(addr, "/api/add-torrent", "name=x.torrent&data=!!!!");
+        assert_eq!(bad.status(), 400);
+        let empty = post(addr, "/api/add-torrent", "name=x.torrent&data=");
+        assert_eq!(empty.status(), 400);
+    }
+
+    #[test]
+    fn add_torrent_queues_the_upload_instead_of_failing_the_request() {
+        let (addr, _state) = server();
+        // Not a real .torrent: the upload succeeds and the parser reports the
+        // error on the job, which is what the table shows.
+        let body = post(addr, "/api/add-torrent", "name=notes.torrent&data=aGVsbG8=")
+            .into_string()
+            .unwrap();
+        assert!(body.contains("\"id\":1"), "response was {body}");
+
+        let mut state = String::new();
+        for _ in 0..60 {
+            std::thread::sleep(std::time::Duration::from_millis(25));
+            state = state_body(addr);
+            if state.contains("\"status\":\"error\"") {
+                break;
+            }
+        }
+        assert!(state.contains("\"status\":\"error\""), "state was {state}");
     }
 }

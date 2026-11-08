@@ -119,9 +119,12 @@ The same engine behind a local download manager: categories with live counts, a
 sortable table (size, progress, speed, time left, peers, status, age), multi-select
 with Start/Pause/Stop/Retry/Remove, an add sheet that queues several links at once
 and can start them paused, preferences for the default folder and cap, search, a
-details pane, a right-click menu and keyboard shortcuts. The HTML, CSS and JS are
-compiled into the binary — no extra dependency, no second process — and it binds
-loopback only unless you ask for `--bind`.
+details pane, a right-click menu and keyboard shortcuts. Drop a `.torrent` file
+anywhere on the page or a magnet link, and it queues; Tools clears finished jobs,
+exports the list as JSON and copies every path, the sidebar keeps a 60-second speed
+graph, and Preferences can send a desktop notification when a download finishes or
+fails. The HTML, CSS and JS are compiled into the binary — no extra dependency, no
+second process — and it binds loopback only unless you ask for `--bind`.
 
 Underneath it is a small JSON API, form-encoded on the way in:
 
@@ -130,6 +133,7 @@ Underneath it is a small JSON API, form-encoded on the way in:
 | `GET /api/state` | every job with live counters, session totals and the current settings |
 | `GET`/`POST /api/settings` | default folder (`output=`) and cap (`limit=`, `none` clears it) |
 | `POST /api/add` | `target=<magnet or path>&output=<dir>&limit=<rate>&paused=1` |
+| `POST /api/add-torrent` | a dropped file: `name=<file>&data=<base64>&output=<dir>&limit=<rate>` |
 | `POST /api/pause` / `resume` | `id=<job>`, `ids=1,2,3` or `all=1` |
 | `POST /api/cancel` | `id=<job>`, `ids=1,2,3` or `all=1` |
 | `POST /api/remove` | drop finished jobs from the list: `id=`, `ids=` or `finished=1` |

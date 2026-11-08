@@ -424,6 +424,35 @@
         .statusbar .spacer { flex: 1; }
         .statusbar b { color: var(--muted); font-weight: 500; font-variant-numeric: tabular-nums; }
 
+        /* ---------- speed graph ---------- */
+        .graph { margin: 0 8px 16px; }
+        .graph svg {
+            display: block;
+            width: 100%;
+            height: 46px;
+            background: #0b0e12;
+            border: 1px solid var(--line);
+            border-radius: 7px;
+        }
+        .graph-meta { display: flex; justify-content: space-between; margin-top: 5px; font-size: 10px; color: var(--dim); }
+
+        /* ---------- drag and drop ---------- */
+        .dropzone {
+            position: fixed;
+            inset: 0;
+            z-index: 60;
+            display: none;
+            place-items: center;
+            text-align: center;
+            background: rgba(9, 10, 13, .78);
+            backdrop-filter: blur(3px);
+            border: 2px dashed rgba(255, 122, 47, .55);
+        }
+        .dropzone.show { display: grid; }
+        .dropzone .card { padding: 26px 34px; background: #14171d; border: 1px solid var(--line-2); border-radius: 14px; }
+        .dropzone strong { display: block; font-size: 15px; margin-bottom: 4px; }
+        .dropzone small { color: var(--muted); }
+
         /* ---------- dialogs ---------- */
         dialog {
             width: min(560px, calc(100vw - 40px));
@@ -571,6 +600,9 @@
             <button class="btn" data-act="settings" title="Default folder and speed limit">
                 <span class="glyph">⚙</span> Preferences
             </button>
+            <button class="btn" id="tools-open" title="Bulk tools">
+                <span class="glyph">⋯</span> Tools
+            </button>
             <span class="spacer"></span>
             <label class="search">
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -606,6 +638,14 @@
                         <dd id="sum-jobs">0</dd>
                     </div>
                 </dl>
+                <h2>Speed</h2>
+                <div class="graph">
+                    <svg viewBox="0 0 200 46" preserveAspectRatio="none" aria-hidden="true">
+                        <polyline id="graph-line" fill="none" stroke="#ff7a2f" stroke-width="1.6"
+                            points="" />
+                    </svg>
+                    <div class="graph-meta"><span>last 60s</span><span id="graph-peak">0 B/s</span></div>
+                </div>
                 <div class="sidebar-foot">
                     Serving this machine only.<br />
                     No account, no telemetry.
@@ -691,6 +731,7 @@
                 <input id="settings-limit" spellcheck="false" autocomplete="off"
                     placeholder="unlimited — e.g. 500k" />
             </label>
+            <label class="inline"><input type="checkbox" id="settings-notify" /> Notify me when a download finishes or fails</label>
             <p class="form-error" id="settings-error"></p>
             <footer>
                 <button type="button" class="btn" data-close>Cancel</button>
@@ -698,6 +739,13 @@
             </footer>
         </form>
     </dialog>
+
+    <div class="dropzone" id="dropzone">
+        <div class="card">
+            <strong>Drop to download</strong>
+            <small>.torrent files or magnet links — added to the current folder</small>
+        </div>
+    </div>
 
     <div class="toasts" id="toasts" aria-live="polite"></div>
 
@@ -740,6 +788,9 @@
             reachable: true,
             message: "ready",
             updated: 0,
+            history: [],
+            statuses: new Map(),
+            notify: localStorage.getItem("ftc.notify") === "1",
         };
 
         /* ---------- formatting ---------- */
@@ -1116,6 +1167,32 @@
             body.append(head, grid);
         }
 
+        function renderGraph() {
+            const line = $("#graph-line");
+            const peak = $("#graph-peak");
+            const history = app.history;
+            if (!history.length) {
+                line.setAttribute("points", "");
+                peak.textContent = "0 B/s";
+                return;
+            }
+            const top = Math.max(1, ...history);
+            const width = 200;
+            const height = 46;
+            const step = history.length > 1 ? width / (history.length - 1) : width;
+            line.setAttribute(
+                "points",
+                history
+                    .map((value, index) => {
+                        const x = (index * step).toFixed(1);
+                        const y = (height - 2 - (value / top) * (height - 5)).toFixed(1);
+                        return `${x},${y}`;
+                    })
+                    .join(" "),
+            );
+            peak.textContent = `${bytes(top)}/s`;
+        }
+
         function renderSummary() {
             $("#sum-speed").textContent = speed(app.totals.speed);
             $("#sum-downloaded").textContent = bytes(app.totals.downloaded);
@@ -1164,6 +1241,7 @@
             const chip = $("#conn-chip");
             chip.className = app.reachable ? "chip ok" : "chip bad";
             $("#conn-text").textContent = app.reachable ? "connected" : "offline";
+            renderGraph();
         }
 
         /* ---------- actions ---------- */
@@ -1222,41 +1300,166 @@
             }
         }
 
+        function menuItem(label, run, enabled = true) {
+            const button = document.createElement("button");
+            button.type = "button";
+            button.textContent = label;
+            button.disabled = !enabled;
+            button.addEventListener("click", () => {
+                closeMenu();
+                run();
+            });
+            return button;
+        }
+
+        function placeMenu(x, y) {
+            menu.style.left = `${Math.min(x, window.innerWidth - 226)}px`;
+            menu.style.top = `${Math.min(y, window.innerHeight - 300)}px`;
+            document.body.append(menu);
+        }
+
         function openMenu(x, y, job) {
             closeMenu();
             menu = document.createElement("div");
             menu.className = "menu";
-
-            const item = (label, run, enabled = true) => {
-                const button = document.createElement("button");
-                button.type = "button";
-                button.textContent = label;
-                button.disabled = !enabled;
-                button.addEventListener("click", () => {
-                    closeMenu();
-                    run();
-                });
-                return button;
-            };
-
             menu.append(
-                item("Start", () => runAction("resume"), APPLIES.resume(job)),
-                item("Pause", () => runAction("pause"), APPLIES.pause(job)),
-                item("Stop", () => runAction("cancel"), APPLIES.cancel(job)),
-                item("Retry", () => runAction("retry"), APPLIES.retry(job)),
-                item("Remove from list", () => runAction("remove"), APPLIES.remove(job)),
+                menuItem("Start", () => runAction("resume"), APPLIES.resume(job)),
+                menuItem("Pause", () => runAction("pause"), APPLIES.pause(job)),
+                menuItem("Stop", () => runAction("cancel"), APPLIES.cancel(job)),
+                menuItem("Retry", () => runAction("retry"), APPLIES.retry(job)),
+                menuItem("Remove from list", () => runAction("remove"), APPLIES.remove(job)),
             );
-            const rule = document.createElement("hr");
+            menu.append(document.createElement("hr"));
             menu.append(
-                rule,
-                item("Open folder", () => revealJob(job)),
-                item("Copy path", () => copyPath(job)),
-                item("Add download…", openAdd),
+                menuItem("Open folder", () => revealJob(job)),
+                menuItem("Copy path", () => copyText(job.path)),
+                menuItem("Copy source link", () => copyText(job.target)),
+                menuItem("Add download…", openAdd),
             );
+            placeMenu(x, y);
+        }
 
-            menu.style.left = `${Math.min(x, window.innerWidth - 210)}px`;
-            menu.style.top = `${Math.min(y, window.innerHeight - 260)}px`;
-            document.body.append(menu);
+        function openTools(x, y) {
+            closeMenu();
+            menu = document.createElement("div");
+            menu.className = "menu";
+            const finished = app.jobs.filter((job) => APPLIES.remove(job)).length;
+            menu.append(
+                menuItem(`Clear completed (${finished})`, clearCompleted, finished > 0),
+                menuItem("Export download list", exportList, app.jobs.length > 0),
+                menuItem("Copy all paths", copyAllPaths, app.jobs.length > 0),
+                menuItem("Open preferences", openSettings),
+            );
+            placeMenu(x, y);
+        }
+
+        async function clearCompleted() {
+            try {
+                const result = await api("/api/remove", { finished: "1" });
+                const count = (result && result.removed) || 0;
+                app.selected.clear();
+                toast(`Removed ${count} finished download${count === 1 ? "" : "s"}`);
+                poll();
+            } catch (error) {
+                toast(error.message, true);
+            }
+        }
+
+        function exportList() {
+            const data = JSON.stringify(
+                { exported: new Date().toISOString(), downloads: app.jobs },
+                null,
+                2,
+            );
+            const link = document.createElement("a");
+            link.href = URL.createObjectURL(new Blob([data], { type: "application/json" }));
+            link.download = "ftc-downloads.json";
+            link.click();
+            setTimeout(() => URL.revokeObjectURL(link.href), 2000);
+            toast("Exported the download list");
+        }
+
+        async function copyAllPaths() {
+            await copyText(app.jobs.map((job) => job.path).join("\n"), `${app.jobs.length} paths copied`);
+        }
+
+        async function copyText(text, message = "Copied") {
+            try {
+                await navigator.clipboard.writeText(text);
+                toast(message);
+            } catch {
+                toast(text);
+            }
+        }
+
+        function notify(job, message) {
+            toast(message);
+            if (!app.notify || !("Notification" in window) || Notification.permission !== "granted") return;
+            try {
+                new Notification(job.name || "ftc", { body: message, tag: `ftc-${job.id}` });
+            } catch {
+                // The toast already delivered the news.
+            }
+        }
+
+        function toBase64(buffer) {
+            const bytes = new Uint8Array(buffer);
+            let binary = "";
+            const chunk = 0x8000;
+            for (let index = 0; index < bytes.length; index += chunk) {
+                binary += String.fromCharCode.apply(null, bytes.subarray(index, index + chunk));
+            }
+            return btoa(binary);
+        }
+
+        async function addFiles(fileList) {
+            const files = [...fileList].filter((file) => file.name.toLowerCase().endsWith(".torrent"));
+            if (!files.length) {
+                toast("Only .torrent files can be dropped here.", true);
+                return;
+            }
+            let queued = 0;
+            for (const file of files) {
+                try {
+                    const data = toBase64(await file.arrayBuffer());
+                    await api("/api/add-torrent", {
+                        name: file.name,
+                        data,
+                        output: app.settings.output,
+                    });
+                    queued += 1;
+                } catch (error) {
+                    toast(`${file.name}: ${error.message}`, true);
+                }
+            }
+            if (queued) {
+                toast(`Queued ${queued} torrent${queued === 1 ? "" : "s"}`);
+                poll();
+            }
+        }
+
+        async function addText(text) {
+            const targets = text
+                .split(/\s+/)
+                .map((line) => line.trim())
+                .filter((line) => line.startsWith("magnet:") || line.endsWith(".torrent"));
+            if (!targets.length) {
+                toast("Drop a .torrent file, a magnet link or a .torrent path.", true);
+                return;
+            }
+            let queued = 0;
+            for (const target of targets) {
+                try {
+                    await api("/api/add", { target, output: app.settings.output });
+                    queued += 1;
+                } catch (error) {
+                    toast(error.message, true);
+                }
+            }
+            if (queued) {
+                toast(`Queued ${queued} download${queued === 1 ? "" : "s"}`);
+                poll();
+            }
         }
 
         document.addEventListener("click", (event) => {
@@ -1281,6 +1484,7 @@
             $("#settings-error").textContent = "";
             $("#settings-output").value = app.settings.output || "";
             $("#settings-limit").value = app.settings.limit ? `${Math.round(app.settings.limit / 1024)}k` : "";
+            $("#settings-notify").checked = app.notify;
             settingsDialog.showModal();
         }
 
@@ -1338,6 +1542,17 @@
                     limit: $("#settings-limit").value.trim() || "none",
                 });
                 app.settings = { output: result.output, limit: result.limit };
+
+                let allowed = false;
+                if ($("#settings-notify").checked) {
+                    if ("Notification" in window) {
+                        if (Notification.permission === "default") await Notification.requestPermission();
+                        allowed = Notification.permission === "granted";
+                    }
+                }
+                app.notify = allowed;
+                localStorage.setItem("ftc.notify", allowed ? "1" : "0");
+
                 settingsDialog.close();
                 toast("Preferences saved");
                 poll();
@@ -1416,6 +1631,38 @@
             }
         });
 
+        /* ---------- tools + drag and drop ---------- */
+        $("#tools-open").addEventListener("click", (event) => {
+            const rect = event.currentTarget.getBoundingClientRect();
+            openTools(rect.left, rect.bottom + 6);
+        });
+
+        const dropzone = $("#dropzone");
+        let dragDepth = 0;
+
+        window.addEventListener("dragenter", (event) => {
+            const types = event.dataTransfer ? [...event.dataTransfer.types] : [];
+            if (!types.includes("Files")) return;
+            dragDepth += 1;
+            dropzone.classList.add("show");
+        });
+        window.addEventListener("dragover", (event) => event.preventDefault());
+        window.addEventListener("dragleave", () => {
+            dragDepth = Math.max(0, dragDepth - 1);
+            if (!dragDepth) dropzone.classList.remove("show");
+        });
+        window.addEventListener("drop", (event) => {
+            event.preventDefault();
+            dragDepth = 0;
+            dropzone.classList.remove("show");
+            if (event.dataTransfer.files.length) {
+                addFiles(event.dataTransfer.files);
+                return;
+            }
+            const text = event.dataTransfer.getData("text/plain");
+            if (text) addText(text);
+        });
+
         /* ---------- polling ---------- */
         function apply(state) {
             app.jobs = Array.isArray(state.jobs) ? state.jobs : [];
@@ -1423,6 +1670,22 @@
             app.totals = state.totals || app.totals;
             app.version = state.version || app.version;
             app.updated = Math.floor(Date.now() / 1000);
+
+            const previous = app.statuses;
+            const statuses = new Map();
+            for (const job of app.jobs) {
+                statuses.set(job.id, job.status);
+                const before = previous.get(job.id);
+                if (before && before !== job.status && app.notify) {
+                    if (job.status === "done") notify(job, `${title(job)} finished downloading`);
+                    if (job.status === "error") notify(job, `${title(job)} failed — ${job.error || "unknown error"}`);
+                }
+            }
+            app.statuses = statuses;
+
+            app.history.push(app.totals.speed || 0);
+            if (app.history.length > 60) app.history.shift();
+
             const ids = new Set(app.jobs.map((job) => job.id));
             for (const id of [...app.selected]) if (!ids.has(id)) app.selected.delete(id);
             if (app.detail && !ids.has(app.detail)) app.detail = null;

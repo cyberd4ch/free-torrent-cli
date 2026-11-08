@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.4.0] - 2026-11-08
+
+### Added
+- **Drop a `.torrent` on the page.** The browser cannot read a filesystem path, so
+  the file is base64-encoded to `POST /api/add-torrent`, parked in the temp folder,
+  parsed by the worker and deleted as soon as it has been read. Dropping a magnet
+  link or a `.torrent` path as text queues it too. Uploads are capped at 8 MB and a
+  body that is not base64 is a `400`.
+- **Tools menu**: clear every finished download, export the whole list as JSON, copy
+  all save paths, and jump to preferences.
+- **60-second speed graph** in the sidebar, drawn from the same totals the status
+  bar shows, with the window's peak labelled.
+- **Completion notifications**, opt-in in Preferences: a desktop notification when a
+  job finishes or fails (with the error), alongside the toast.
+- **Cross-platform verification.** The test workflow now runs on Ubuntu, macOS and
+  Windows, and `smoke.yml` downloads each published archive for three platforms,
+  checks it against `SHA256SUMS`, runs `--version`, starts `serve`, reads
+  `/api/state`, fetches the page, and asserts a missing torrent surfaces as a job
+  error rather than a broken server.
+
+### Verified
+- The upload path, the notification transition and the tools are exercised through
+  the real server and a syntax-checked page script; the archive smoke test is the
+  same commands a user runs after downloading.
+
 ## [3.3.0] - 2026-11-08
 
 ### Added
