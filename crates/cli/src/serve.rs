@@ -5,6 +5,7 @@
 //! a second bookkeeping layer that could disagree with the engine.
 
 use crate::http::{self, Request};
+use crate::parse_rate;
 use ftc_core::error::Error;
 use ftc_core::magnet;
 use ftc_core::session::{make_peer_id, Options};
@@ -42,6 +43,7 @@ struct Job {
     output: PathBuf,
     status: &'static str,
     total: u64,
+    limit: Option<u64>,
     progress: Option<Arc<Progress>>,
     stop: Option<Arc<AtomicBool>>,
     pause: Option<Arc<AtomicBool>>,
@@ -141,6 +143,15 @@ fn add(state: &Arc<State>, body: &str) -> (u16, &'static str, Vec<u8>) {
         );
     }
 
+    // An unparseable cap is a typo, not a reason to start an unlimited job.
+    let limit = match field("limit") {
+        Some(value) => match parse_rate(&value) {
+            Ok(rate) => Some(rate),
+            Err(message) => return (400, "text/plain; charset=utf-8", message.into_bytes()),
+        },
+        None => state.options.limit_bps,
+    };
+
     let id = state.next_id.fetch_add(1, Ordering::Relaxed);
     state.jobs.lock().unwrap().push(Job {
         id,
@@ -149,12 +160,13 @@ fn add(state: &Arc<State>, body: &str) -> (u16, &'static str, Vec<u8>) {
         output: output.clone(),
         status: "metadata",
         total: 0,
+        limit,
         progress: None,
         stop: None,
         pause: None,
         error: None,
     });
-    spawn_download(state.clone(), id, target, output);
+    spawn_download(state.clone(), id, target, output, limit);
     (
         200,
         "application/json",
@@ -233,7 +245,7 @@ fn pause(state: &Arc<State>, body: &str, paused: bool) -> (u16, &'static str, Ve
     )
 }
 
-fn spawn_download(state: Arc<State>, id: u64, target: String, output: PathBuf) {
+fn spawn_download(state: Arc<State>, id: u64, target: String, output: PathBuf, limit: Option<u64>) {
     std::thread::spawn(move || {
         let torrent = match resolve(&target, &state.options) {
             Ok(torrent) => torrent,
@@ -243,7 +255,9 @@ fn spawn_download(state: Arc<State>, id: u64, target: String, output: PathBuf) {
             return;
         }
 
-        let (session, progress) = match Session::open(torrent, &output, state.options.clone()) {
+        let mut options = state.options.clone();
+        options.limit_bps = limit;
+        let (session, progress) = match Session::open(torrent, &output, options) {
             Ok(opened) => opened,
             Err(err) => return finish(&state, id, "error", Some(err.to_string())),
         };
@@ -346,9 +360,13 @@ fn state_json(state: &State) -> String {
             Some(message) => format!("\"{}\"", http::json_escape(message)),
             None => "null".to_string(),
         };
+        let limit = match job.limit {
+            Some(rate) => rate.to_string(),
+            None => "null".to_string(),
+        };
         out.push_str(&format!(
             "{{\"id\":{},\"target\":\"{}\",\"name\":\"{}\",\"output\":\"{}\",\"status\":\"{}\",\
-             \"total\":{},\"downloaded\":{},\"pieces\":{},\"verified\":{},\"peers\":{},\
+             \"total\":{},\"limit\":{limit},\"downloaded\":{},\"pieces\":{},\"verified\":{},\"peers\":{},\
              \"speed\":{:.1},\"elapsed\":{:.1},\"error\":{}}}",
             job.id,
             http::json_escape(&job.target),
@@ -431,6 +449,38 @@ mod tests {
                 .send_string("id=404");
             assert_eq!(unknown.unwrap_err().into_response().unwrap().status(), 404);
         }
+    }
+
+    #[test]
+    fn rejects_an_unparseable_rate_limit() {
+        let addr = spawn();
+        let err = ureq::post(&format!("http://{addr}/api/add"))
+            .set("Content-Type", "application/x-www-form-urlencoded")
+            .send_string("target=/nonexistent/file.torrent&limit=fast")
+            .expect_err("a bad limit should be a 400, not a silent unlimited job");
+        assert_eq!(err.into_response().unwrap().status(), 400);
+    }
+
+    #[test]
+    fn a_job_keeps_the_limit_it_was_added_with() {
+        let addr = spawn();
+        ureq::post(&format!("http://{addr}/api/add"))
+            .set("Content-Type", "application/x-www-form-urlencoded")
+            .send_string("target=/nonexistent/file.torrent&limit=2M&output=/tmp")
+            .unwrap();
+        let mut body = String::new();
+        for _ in 0..40 {
+            std::thread::sleep(std::time::Duration::from_millis(25));
+            body = ureq::get(&format!("http://{addr}/api/state"))
+                .call()
+                .unwrap()
+                .into_string()
+                .unwrap();
+            if body.contains("\"limit\":2097152") {
+                break;
+            }
+        }
+        assert!(body.contains("\"limit\":2097152"), "state was {body}");
     }
 
     #[test]

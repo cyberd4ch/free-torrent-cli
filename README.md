@@ -90,6 +90,7 @@ OPTIONS:
         --max-peers <n>   simultaneous peer connections (default: 6)
         --no-dht          skip DHT peer discovery (trackers only)
         --seed <secs>     after finishing, serve pieces to peers for <secs>s
+        --limit <rate>    cap the download rate, e.g. 500k or 2M (default: unlimited)
 ```
 
 Progress renders in place, no log spam:
@@ -108,6 +109,7 @@ hash before writing a single byte.
 ftc gui                          # web ui, opened in your browser
 ftc serve                        # http://127.0.0.1:8080, terminal only
 ftc serve --port 9000 -o ~/Downloads
+ftc serve --limit 2M             # default cap for every job added from the page
 ```
 
 The same engine behind a local page: paste a magnet or a `.torrent` path, watch
@@ -120,7 +122,7 @@ Underneath it is a small JSON API, form-encoded on the way in:
 | Endpoint | |
 | :--- | :--- |
 | `GET /api/state` | every job with its live counters |
-| `POST /api/add` | `target=<magnet or path>&output=<dir>` |
+| `POST /api/add` | `target=<magnet or path>&output=<dir>&limit=<rate>` |
 | `POST /api/pause` | `id=<job id>` |
 | `POST /api/resume` | `id=<job id>` |
 | `POST /api/cancel` | `id=<job id>` |
@@ -133,6 +135,11 @@ touching verified progress; resume continues from the same queue.
 to `~/Downloads`, because a double-clicked launcher has no useful working
 directory.
 
+A `limit` (the box next to the output field) caps that one job; `--limit` at
+startup sets the default. The cap is a single shared token bucket in the engine,
+so `2M` means two mebibytes per second across all peers — not per connection —
+and a rate it cannot parse is rejected rather than silently ignored.
+
 ## What you get for 3 MB
 
 | | |
@@ -140,6 +147,7 @@ directory.
 | **No runtime.** Static binary. No Node, no Python, no JVM, no Electron download on first launch. | **No libtorrent.** Bencode, trackers, wire protocol, DHT and seeding are this repo's code. |
 | **Resumable.** Existing pieces are re-verified on disk, so a restart continues instead of redownloading. | **Honest seeding.** The Bitfield is built from verified pieces only — it never claims a piece it can't prove. |
 | **Multi-file torrents.** Crosses file boundaries without stitching buffers. | **Safe paths.** `..`, absolute paths and separators are rejected before any file is opened. |
+| **A real speed cap.** `--limit 2M` is one shared token bucket, so the number is the aggregate across peers — not a per-connection trickle. | **Pause and resume.** Workers park between blocks; verified pieces are never downloaded twice. |
 
 ## Protocol coverage
 
@@ -158,6 +166,8 @@ directory.
 | DHT (BEP 5) — `get_peers` hunting and announce | ✅ |
 | Seeding (`--seed`) | ✅ |
 | Web UI + local JSON API (`ftc serve`) | ✅ |
+| Pause / resume / cancel from the page, engine-side | ✅ |
+| Download rate limit (`--limit`, per-job `limit`) | ✅ |
 
 ## How it's built
 
@@ -171,7 +181,7 @@ crates/core     the engine, as a library
   peer.rs       wire framing and message codec
   seed.rs       serve verified pieces to inbound peers
   storage.rs    logical stream → files, piece writes, resume verification
-  session.rs    peer workers, retrying pieces, progress accounting
+  session.rs    peer workers, retrying pieces, progress accounting, rate limit
 crates/cli      the `ftc` binary — argument parsing, progress rendering
   http.rs       a blocking HTTP/1.1 server, no dependency
   serve.rs      `ftc serve`: job registry, JSON API, cancellation
@@ -210,7 +220,8 @@ cargo clippy --all-targets -- -D warnings
 cargo fmt --all -- --check
 ```
 
-The suite is end-to-end where it matters: a fake peer serves a real torrent and
+51 tests — 39 in the engine, 12 in the CLI. The suite is end-to-end where it
+matters: a fake peer serves a real torrent and
 the session downloads, verifies and writes it; a fake router → holder chain over
 UDP exercises a full DHT hunt and a token-validated announce; a fake leecher
 pulls one block from the seeder and is dropped for asking beyond the torrent.

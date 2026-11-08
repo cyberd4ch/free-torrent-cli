@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.2.0] - unreleased
+
+### Added
+- **Download rate limit.** `--limit 500k` caps a CLI download, `ftc serve --limit 2M`
+  sets the default for jobs added from the page, and the UI takes a per-job `limit`
+  (`limit=` on `POST /api/add`). The bucket lives in the engine and is shared by every
+  peer worker, so the number is the aggregate rate rather than a per-connection cap.
+  A rate that cannot be parsed is a `400`, not a silently unlimited job.
+- `Throttle` in `ftc-core::session`: `bytes_per_second`, reserve-before-request
+  pacing, and a test that proves 40 KB at 80 KB/s takes at least 300 ms.
+
 ## [3.1.0] - 2026-11-08
 
 ### Added

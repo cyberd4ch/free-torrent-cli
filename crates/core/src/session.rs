@@ -26,6 +26,9 @@ pub struct Options {
     pub port: u16,
     /// Discover peers from the DHT (BEP 5) in addition to the trackers.
     pub use_dht: bool,
+    /// Cap the download at this many bytes per second across every peer.
+    /// `None` means unlimited.
+    pub limit_bps: Option<u64>,
 }
 
 impl Default for Options {
@@ -34,6 +37,7 @@ impl Default for Options {
             max_peers: 6,
             port: 6881,
             use_dht: true,
+            limit_bps: None,
         }
     }
 }
@@ -88,6 +92,42 @@ pub struct Stats {
     pub resumed: usize,
 }
 
+/// A shared token bucket: each worker reserves the time its next block will
+/// take, so the *aggregate* rate across all peers stays at `bytes_per_second`
+/// rather than each peer getting the full budget.
+#[derive(Debug)]
+pub struct Throttle {
+    bytes_per_second: u64,
+    next: Mutex<Instant>,
+}
+
+impl Throttle {
+    pub fn new(bytes_per_second: u64) -> Throttle {
+        Throttle {
+            bytes_per_second: bytes_per_second.max(1),
+            next: Mutex::new(Instant::now()),
+        }
+    }
+
+    pub fn bytes_per_second(&self) -> u64 {
+        self.bytes_per_second
+    }
+
+    /// Wait long enough to keep the long-run average, then return.
+    fn reserve(&self, bytes: usize) {
+        let wait = {
+            let mut next = self.next.lock().unwrap();
+            let now = Instant::now();
+            let slot = (*next).max(now);
+            *next = slot + Duration::from_secs_f64(bytes as f64 / self.bytes_per_second as f64);
+            slot.saturating_duration_since(now)
+        };
+        if !wait.is_zero() {
+            std::thread::sleep(wait);
+        }
+    }
+}
+
 pub struct Session {
     torrent: Arc<Torrent>,
     storage: Arc<Storage>,
@@ -100,6 +140,7 @@ pub struct Session {
     resumed: usize,
     stop: Arc<AtomicBool>,
     pause: Arc<AtomicBool>,
+    throttle: Option<Arc<Throttle>>,
 }
 
 impl Session {
@@ -132,6 +173,7 @@ impl Session {
             done: AtomicBool::new(missing.is_empty()),
             started: Instant::now(),
         });
+        let throttle = options.limit_bps.map(Throttle::new).map(Arc::new);
         let session = Session {
             torrent,
             storage: Arc::new(storage),
@@ -144,6 +186,7 @@ impl Session {
             resumed,
             stop: Arc::new(AtomicBool::new(false)),
             pause: Arc::new(AtomicBool::new(false)),
+            throttle,
         };
         Ok((session, progress))
     }
@@ -308,6 +351,7 @@ impl Session {
             peer_id: self.peer_id,
             stop: self.stop.clone(),
             pause: self.pause.clone(),
+            throttle: self.throttle.clone(),
         }
     }
 }
@@ -322,6 +366,7 @@ struct Shared {
     peer_id: [u8; 20],
     stop: Arc<AtomicBool>,
     pause: Arc<AtomicBool>,
+    throttle: Option<Arc<Throttle>>,
 }
 
 impl Shared {
@@ -423,6 +468,11 @@ impl Shared {
 
         let mut piece = vec![0u8; self.torrent.piece_size(index) as usize];
         for (begin, length) in peer::pick_blocks(piece.len() as u64, BLOCK_SIZE) {
+            // Pay the wait before asking for the block, so a fast peer cannot
+            // race ahead of the cap.
+            if let Some(throttle) = &self.throttle {
+                throttle.reserve(length as usize);
+            }
             peer::write_message(
                 &mut stream,
                 &Message::Request {
@@ -560,6 +610,7 @@ mod tests {
                 max_peers: 1,
                 port: 6881,
                 use_dht: false,
+                limit_bps: None,
             },
         )
         .unwrap();
@@ -599,6 +650,7 @@ mod tests {
                 max_peers: 1,
                 port: 6881,
                 use_dht: false,
+                limit_bps: None,
             },
         )
         .unwrap();
@@ -616,6 +668,48 @@ mod tests {
         assert!(
             stats.elapsed >= Duration::from_millis(400),
             "the run finished in {:?}, so the pause never blocked it",
+            stats.elapsed
+        );
+
+        let _ = server.join();
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_rate_limit_slows_the_download_instead_of_stopping_it() {
+        let data: Vec<u8> = (0..40_000u32).map(|index| (index % 251) as u8).collect();
+        let piece_length = 16_384usize;
+        let raw = single_file_torrent("limited.bin", &data, piece_length);
+        let torrent = Torrent::parse(&raw).unwrap();
+        let pieces = torrent.piece_count();
+        let info_hash = torrent.info_hash;
+
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        let server =
+            std::thread::spawn(move || fake_peer(listener, data, piece_length, pieces, info_hash));
+
+        let dir = std::env::temp_dir().join(format!("ftc-limit-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let (session, _progress) = Session::open(
+            torrent,
+            &dir,
+            Options {
+                max_peers: 1,
+                port: 6881,
+                use_dht: false,
+                // 40 KB at 80 KB/s cannot finish much inside 300 ms.
+                limit_bps: Some(80_000),
+            },
+        )
+        .unwrap();
+
+        let stats = session.run(Some(vec![address])).unwrap();
+        assert_eq!(stats.downloaded, 40_000);
+        assert!(
+            stats.elapsed >= Duration::from_millis(300),
+            "40 KB at 80 KB/s finished in {:?}, so the cap was ignored",
             stats.elapsed
         );
 

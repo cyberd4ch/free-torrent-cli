@@ -22,6 +22,7 @@ OPTIONS:
         --max-peers <n>   simultaneous peer connections (default: 6)
         --no-dht          skip DHT peer discovery (trackers only)
         --seed <secs>     after finishing, serve pieces to peers for <secs>s
+        --limit <rate>    cap the download rate, e.g. 500k or 2M (default: unlimited)
     -h, --help            show this help
     -V, --version         show the version
 
@@ -43,6 +44,7 @@ OPTIONS:
     -o, --output <dir>    default download directory (default: current directory)
         --max-peers <n>   simultaneous peer connections (default: 6)
         --no-dht          skip DHT peer discovery (trackers only)
+        --limit <rate>    default download cap for new jobs, e.g. 2M
         --open            also open the page in your browser
     -h, --help            show this help
 ";
@@ -109,6 +111,10 @@ fn run() -> Result<(), String> {
             }
             "--no-dht" => {
                 options.use_dht = false;
+            }
+            "--limit" => {
+                let value = args.next().ok_or("--limit needs a rate")?;
+                options.limit_bps = Some(parse_rate(&value)?);
             }
             "--seed" => {
                 let value = args.next().ok_or("--seed needs seconds")?;
@@ -275,6 +281,11 @@ fn run_server(args: &[String], gui: bool) -> Result<(), String> {
                 options.use_dht = false;
                 index += 1;
             }
+            "--limit" => {
+                let value = args.get(index + 1).ok_or("--limit needs a rate")?.clone();
+                options.limit_bps = Some(parse_rate(&value)?);
+                index += 2;
+            }
             "--open" => {
                 open = true;
                 index += 1;
@@ -297,6 +308,24 @@ fn run_server(args: &[String], gui: bool) -> Result<(), String> {
         println!("Ctrl-C to stop");
     }
     server.serve().map_err(|err| err.to_string())
+}
+
+/// `2M`, `500k`, `1048576` — a rate in bytes per second, 1024-based.
+pub(crate) fn parse_rate(value: &str) -> Result<u64, String> {
+    let trimmed = value.trim();
+    let (digits, multiplier) = match trimmed.chars().last() {
+        Some('k' | 'K') => (&trimmed[..trimmed.len() - 1], 1024u64),
+        Some('m' | 'M') => (&trimmed[..trimmed.len() - 1], 1024 * 1024),
+        Some('g' | 'G') => (&trimmed[..trimmed.len() - 1], 1024 * 1024 * 1024),
+        _ => (trimmed, 1),
+    };
+    let number: u64 = digits
+        .parse()
+        .map_err(|_| format!("bad rate {value:?} — try 500k, 2M or 1048576"))?;
+    number
+        .checked_mul(multiplier)
+        .filter(|rate| *rate > 0)
+        .ok_or_else(|| format!("bad rate {value:?} — must be at least 1 byte/s"))
 }
 
 /// Where a double-clicked GUI should put files: never the working directory,

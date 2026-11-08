@@ -61,7 +61,7 @@
 
         form {
             display: grid;
-            grid-template-columns: 1fr 190px auto;
+            grid-template-columns: 1fr 170px 130px auto;
             gap: 10px;
             margin: 18px 0 6px;
         }
@@ -223,6 +223,7 @@
             <input id="target" placeholder="magnet:?xt=urn:btih:… or /path/to/file.torrent"
                 autocomplete="off" spellcheck="false" />
             <input id="output" placeholder="output dir (default: cwd)" autocomplete="off" spellcheck="false" />
+            <input id="limit" placeholder="limit (2M)" autocomplete="off" spellcheck="false" />
             <button type="submit">Add download</button>
         </form>
         <p class="hint" id="hint"></p>
@@ -300,6 +301,7 @@
             const right = document.createElement("span");
             right.textContent = [
                 job.speed ? `${humanBytes(job.speed)}/s` : null,
+                job.limit ? `cap ${humanBytes(job.limit)}/s` : null,
                 job.peers ? `${job.peers} peer${job.peers === 1 ? "" : "s"}` : null,
                 timeLeft(job),
             ].filter(Boolean).join(" · ") || "—";
@@ -392,7 +394,8 @@
                 return;
             }
             const output = document.getElementById("output").value.trim();
-            const added = await send("/api/add", { target, output });
+            const limit = document.getElementById("limit").value.trim();
+            const added = await send("/api/add", { target, output, limit });
             if (added) {
                 document.getElementById("target").value = "";
                 flash("");
