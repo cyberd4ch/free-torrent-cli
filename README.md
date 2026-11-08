@@ -6,7 +6,7 @@
 
 ![Rust](https://img.shields.io/badge/Rust-1.75%2B-000000?style=flat-square&logo=rust)
 ![License](https://img.shields.io/badge/License-MIT-blue?style=flat-square)
-![Tests](https://img.shields.io/badge/Tests-28%20passing-brightgreen?style=flat-square)
+![Tests](https://img.shields.io/badge/Tests-37%20passing-brightgreen?style=flat-square)
 
 Speaks the BitTorrent wire protocol directly — no libtorrent, no shortcuts.
 Verifies every piece with SHA-1, resumes from disk, and handles multi-file
