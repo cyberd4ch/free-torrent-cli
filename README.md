@@ -50,9 +50,9 @@ double-clicks into a text editor showing megabytes of binary.
 | Platform | Archive | Size |
 | :--- | :--- | ---: |
 | **macOS** Apple silicon | [`ftc-macos-arm64.tar.gz`](https://github.com/cyberd4ch/free-torrent-cli/releases/latest/download/ftc-macos-arm64.tar.gz) | 1.3 MB |
-| **macOS** Intel | [`ftc-macos-x86_64.tar.gz`](https://github.com/cyberd4ch/free-torrent-cli/releases/latest/download/ftc-macos-x86_64.tar.gz) | 1.3 MB |
+| **macOS** Intel | [`ftc-macos-x86_64.tar.gz`](https://github.com/cyberd4ch/free-torrent-cli/releases/latest/download/ftc-macos-x86_64.tar.gz) | 1.4 MB |
 | **Linux** x86_64 | [`ftc-linux-x86_64.tar.gz`](https://github.com/cyberd4ch/free-torrent-cli/releases/latest/download/ftc-linux-x86_64.tar.gz) | 1.4 MB |
-| **Windows** x86_64 | [`ftc-windows-x86_64.zip`](https://github.com/cyberd4ch/free-torrent-cli/releases/latest/download/ftc-windows-x86_64.zip) | 1.1 MB |
+| **Windows** x86_64 | [`ftc-windows-x86_64.zip`](https://github.com/cyberd4ch/free-torrent-cli/releases/latest/download/ftc-windows-x86_64.zip) | 1.2 MB |
 
 ```bash
 tar xzf ftc-macos-arm64.tar.gz      # ftc arrives as mode 0755

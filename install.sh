@@ -71,8 +71,12 @@ fi
 
 tar -xzf "$tmp/$ASSET" -C "$tmp"
 
+# An explicit FTC_PREFIX is a choice, not a hint: honour it, and create it when
+# it does not exist. The fallback only applies when we pick the location.
 prefix="${FTC_PREFIX:-/usr/local/bin}"
-if [ ! -d "$prefix" ] || [ ! -w "$prefix" ]; then
+if [ -n "${FTC_PREFIX:-}" ]; then
+  mkdir -p "$prefix"
+elif [ ! -d "$prefix" ] || [ ! -w "$prefix" ]; then
   prefix="$HOME/.local/bin"
   mkdir -p "$prefix"
 fi
