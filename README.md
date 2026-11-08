@@ -97,6 +97,29 @@ A magnet with no tracker still works: it hunts peers through the DHT, fetches
 the `info` dictionary from them (BEP 9/10), and verifies it against the info
 hash before writing a single byte.
 
+## Web UI
+
+```bash
+ftc serve                        # http://127.0.0.1:8080
+ftc serve --port 9000 -o ~/Downloads
+```
+
+The same engine behind a local page: paste a magnet or a `.torrent` path, watch
+progress, speed, peers and ETA, cancel a run. The HTML and the HTTP server are
+compiled into the binary — no extra dependency, no second process — and it binds
+loopback only unless you ask for `--bind`.
+
+Underneath it is a small JSON API, form-encoded on the way in:
+
+| Endpoint | |
+| :--- | :--- |
+| `GET /api/state` | every job with its live counters |
+| `POST /api/add` | `target=<magnet or path>&output=<dir>` |
+| `POST /api/cancel` | `id=<job id>` |
+
+Jobs report the engine's own `Arc<Progress>` atomics, so the page and the
+progress bar in your terminal can never disagree.
+
 ## What you get for 3 MB
 
 | | |
@@ -121,7 +144,7 @@ hash before writing a single byte.
 | Tracker re-announce and peer refill | ✅ |
 | DHT (BEP 5) — `get_peers` hunting and announce | ✅ |
 | Seeding (`--seed`) | ✅ |
-| GUI / web front end | ⬜ planned |
+| Web UI + local JSON API (`ftc serve`) | ✅ |
 
 ## How it's built
 
@@ -137,6 +160,9 @@ crates/core     the engine, as a library
   storage.rs    logical stream → files, piece writes, resume verification
   session.rs    peer workers, retrying pieces, progress accounting
 crates/cli      the `ftc` binary — argument parsing, progress rendering
+  http.rs       a blocking HTTP/1.1 server, no dependency
+  serve.rs      `ftc serve`: job registry, JSON API, cancellation
+  ui.html       the single-page UI, embedded with include_str!
 ```
 
 Six dependencies in total (`sha1`, `hex`, `rand`, `ureq`, `base32`,
@@ -178,7 +204,7 @@ pulls one block from the seeder and is dropped for asking beyond the torrent.
 
 ## Roadmap
 
-1. A local HTTP API, then web and desktop front ends on top of it.
+1. A desktop front end on top of the local JSON API.
 
 ## License
 

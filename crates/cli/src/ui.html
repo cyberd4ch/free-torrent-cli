@@ -1,0 +1,388 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ftc — web ui</title>
+    <style>
+        :root {
+            --bg: #0a0b0d;
+            --panel: #111318;
+            --panel-2: #161a21;
+            --line: #1e222a;
+            --text: #e6e8ec;
+            --muted: #8b93a1;
+            --accent: #ff7a2f;
+            --ok: #3ddc84;
+            --err: #ff5d5d;
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            background:
+                radial-gradient(900px 420px at 15% -10%, rgba(255, 122, 47, .10), transparent 70%),
+                var(--bg);
+            color: var(--text);
+            font: 15px/1.5 ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            max-width: 920px;
+            margin: 0 auto;
+            padding: 28px 20px 8px;
+        }
+
+        .brand { display: flex; align-items: baseline; gap: 10px; }
+        .logo { font-size: 22px; font-weight: 700; letter-spacing: -.02em; }
+        .logo b { color: var(--accent); }
+        .tag {
+            font-size: 10px;
+            letter-spacing: .12em;
+            text-transform: uppercase;
+            color: var(--muted);
+            border: 1px solid var(--line);
+            border-radius: 999px;
+            padding: 2px 8px;
+        }
+        .meta { color: var(--muted); font-size: 12px; }
+
+        main { max-width: 920px; margin: 0 auto; padding: 12px 20px 64px; }
+
+        form {
+            display: grid;
+            grid-template-columns: 1fr 190px auto;
+            gap: 10px;
+            margin: 18px 0 6px;
+        }
+
+        input {
+            width: 100%;
+            padding: 12px 14px;
+            color: var(--text);
+            background: var(--panel);
+            border: 1px solid var(--line);
+            border-radius: 10px;
+            font: inherit;
+            outline: none;
+        }
+
+        input:focus { border-color: #3a4150; box-shadow: 0 0 0 3px rgba(255, 122, 47, .10); }
+        input::placeholder { color: #5c6472; }
+
+        button {
+            padding: 12px 18px;
+            font: inherit;
+            font-weight: 600;
+            color: #12100e;
+            background: var(--accent);
+            border: 0;
+            border-radius: 10px;
+            cursor: pointer;
+        }
+
+        button:hover { filter: brightness(1.08); }
+        button:active { transform: translateY(1px); }
+
+        .hint { min-height: 20px; color: var(--err); font-size: 12px; margin: 0 0 14px; }
+
+        .empty {
+            margin-top: 26px;
+            padding: 34px 22px;
+            color: var(--muted);
+            text-align: center;
+            border: 1px dashed var(--line);
+            border-radius: 12px;
+        }
+
+        .jobs { display: grid; gap: 12px; margin-top: 22px; }
+
+        .job {
+            position: relative;
+            padding: 16px 18px 14px;
+            background: linear-gradient(180deg, var(--panel-2), var(--panel));
+            border: 1px solid var(--line);
+            border-radius: 12px;
+        }
+
+        .job-head { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+
+        .job-name {
+            flex: 1;
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            font-weight: 600;
+        }
+
+        .status {
+            flex: none;
+            font-size: 10px;
+            letter-spacing: .1em;
+            text-transform: uppercase;
+            padding: 3px 9px;
+            border-radius: 999px;
+            border: 1px solid var(--line);
+            color: var(--muted);
+        }
+
+        .s-downloading { color: var(--accent); border-color: rgba(255, 122, 47, .45); }
+        .s-done { color: var(--ok); border-color: rgba(61, 220, 132, .45); }
+        .s-error { color: var(--err); border-color: rgba(255, 93, 93, .45); }
+        .s-metadata { color: #7fb2ff; border-color: rgba(127, 178, 255, .45); }
+
+        .bar {
+            height: 8px;
+            overflow: hidden;
+            background: #0b0d11;
+            border: 1px solid var(--line);
+            border-radius: 999px;
+        }
+
+        .bar i {
+            display: block;
+            height: 100%;
+            width: 0;
+            background: linear-gradient(90deg, #ff7a2f, #ffb057);
+            transition: width .4s ease;
+        }
+
+        .job-foot {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            margin-top: 10px;
+            color: var(--muted);
+            font-size: 12px;
+        }
+
+        .job-path { margin-top: 6px; color: #5c6472; font-size: 11px; word-break: break-all; }
+
+        .job-err {
+            margin-top: 10px;
+            padding: 8px 10px;
+            color: var(--err);
+            background: rgba(255, 93, 93, .08);
+            border: 1px solid rgba(255, 93, 93, .25);
+            border-radius: 8px;
+            font-size: 12px;
+        }
+
+        .cancel {
+            margin-top: 12px;
+            padding: 6px 12px;
+            color: var(--muted);
+            background: transparent;
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        footer {
+            max-width: 920px;
+            margin: 0 auto;
+            padding: 0 20px 40px;
+            color: #4d5563;
+            font-size: 11px;
+        }
+
+        @media (max-width: 640px) {
+            form { grid-template-columns: 1fr; }
+            .job-foot { flex-direction: column; gap: 4px; }
+        }
+    </style>
+</head>
+
+<body>
+    <header>
+        <div class="brand">
+            <span class="logo"><b>ftc</b> web ui</span>
+            <span class="tag">local only</span>
+        </div>
+        <div class="meta" id="meta">connecting…</div>
+    </header>
+
+    <main>
+        <form id="add">
+            <input id="target" placeholder="magnet:?xt=urn:btih:… or /path/to/file.torrent"
+                autocomplete="off" spellcheck="false" />
+            <input id="output" placeholder="output dir (default: cwd)" autocomplete="off" spellcheck="false" />
+            <button type="submit">Add download</button>
+        </form>
+        <p class="hint" id="hint"></p>
+        <div class="jobs" id="jobs"></div>
+    </main>
+
+    <footer>
+        Serving this machine only — no tracker, no account, no telemetry. Close the
+        terminal or press Ctrl-C in it to stop the server.
+    </footer>
+
+    <script>
+        const jobsEl = document.getElementById("jobs");
+        const metaEl = document.getElementById("meta");
+        const hintEl = document.getElementById("hint");
+        const form = document.getElementById("add");
+
+        function humanBytes(value) {
+            if (!value) return "0 B";
+            const units = ["B", "KB", "MB", "GB", "TB"];
+            let index = 0;
+            let size = value;
+            while (size >= 1024 && index < units.length - 1) {
+                size /= 1024;
+                index += 1;
+            }
+            return `${size.toFixed(size < 10 && index > 0 ? 1 : 0)} ${units[index]}`;
+        }
+
+        function timeLeft(job) {
+            if (!job.speed || job.downloaded >= job.total) return "";
+            const seconds = (job.total - job.downloaded) / job.speed;
+            if (seconds > 3600) return ">1h left";
+            if (seconds < 1) return "<1s left";
+            return `${Math.round(seconds)}s left`;
+        }
+
+        function flash(message) {
+            hintEl.textContent = message;
+            setTimeout(() => {
+                if (hintEl.textContent === message) hintEl.textContent = "";
+            }, 5000);
+        }
+
+        function card(job) {
+            const el = document.createElement("article");
+            el.className = "job";
+
+            const head = document.createElement("div");
+            head.className = "job-head";
+            const name = document.createElement("span");
+            name.className = "job-name";
+            name.textContent = job.name || job.target;
+            name.title = job.target;
+            const status = document.createElement("span");
+            status.className = `status s-${job.status}`;
+            status.textContent = job.status;
+            head.append(name, status);
+            el.append(head);
+
+            const percent = job.total
+                ? Math.min(100, Math.round((job.downloaded / job.total) * 100))
+                : job.status === "done" ? 100 : 0;
+            const bar = document.createElement("div");
+            bar.className = "bar";
+            const fill = document.createElement("i");
+            fill.style.width = `${percent}%`;
+            bar.append(fill);
+            el.append(bar);
+
+            const foot = document.createElement("div");
+            foot.className = "job-foot";
+            const left = document.createElement("span");
+            left.textContent = `${percent}% · ${humanBytes(job.downloaded)} / ${job.total ? humanBytes(job.total) : "—"}`;
+            const right = document.createElement("span");
+            right.textContent = [
+                job.speed ? `${humanBytes(job.speed)}/s` : null,
+                job.peers ? `${job.peers} peer${job.peers === 1 ? "" : "s"}` : null,
+                timeLeft(job),
+            ].filter(Boolean).join(" · ") || "—";
+            foot.append(left, right);
+            el.append(foot);
+
+            if (job.error) {
+                const error = document.createElement("div");
+                error.className = "job-err";
+                error.textContent = job.error;
+                el.append(error);
+            }
+
+            const path = document.createElement("div");
+            path.className = "job-path";
+            path.textContent = job.output;
+            el.append(path);
+
+            if (job.status === "downloading" || job.status === "metadata") {
+                const cancel = document.createElement("button");
+                cancel.className = "cancel";
+                cancel.textContent = "Cancel";
+                cancel.addEventListener("click", () => send("/api/cancel", { id: job.id }));
+                el.append(cancel);
+            }
+            return el;
+        }
+
+        function render(jobs) {
+            jobsEl.replaceChildren();
+            if (!jobs.length) {
+                const empty = document.createElement("div");
+                empty.className = "empty";
+                empty.textContent = "Nothing downloading yet. Paste a magnet link or a .torrent path above.";
+                jobsEl.append(empty);
+                return;
+            }
+            for (const job of jobs) jobsEl.append(card(job));
+        }
+
+        async function send(path, params) {
+            try {
+                const response = await fetch(path, {
+                    method: "POST",
+                    headers: { "content-type": "application/x-www-form-urlencoded" },
+                    body: new URLSearchParams(params),
+                });
+                if (!response.ok) {
+                    flash(await response.text());
+                    return null;
+                }
+                return await response.json().catch(() => null);
+            } catch (error) {
+                flash(`request failed: ${error}`);
+                return null;
+            }
+        }
+
+        async function poll() {
+            try {
+                const response = await fetch("/api/state", { cache: "no-store" });
+                const state = await response.json();
+                render(state.jobs);
+                const active = state.jobs.filter((job) => job.status === "downloading").length;
+                metaEl.textContent = `${active} active · ${state.jobs.length} total`;
+            } catch (error) {
+                metaEl.textContent = "server unreachable";
+            }
+        }
+
+        form.addEventListener("submit", async (event) => {
+            event.preventDefault();
+            const target = document.getElementById("target").value.trim();
+            if (!target) {
+                flash("Paste a magnet link or a .torrent path first.");
+                return;
+            }
+            const output = document.getElementById("output").value.trim();
+            const added = await send("/api/add", { target, output });
+            if (added) {
+                document.getElementById("target").value = "";
+                flash("");
+                poll();
+            }
+        });
+
+        poll();
+        setInterval(poll, 1000);
+    </script>
+</body>
+
+</html>

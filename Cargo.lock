@@ -122,15 +122,16 @@ dependencies = [
 
 [[package]]
 name = "free-torrent-cli"
-version = "3.0.0"
+version = "3.1.0"
 dependencies = [
  "ftc-core",
  "hex",
+ "ureq",
 ]
 
 [[package]]
 name = "ftc-core"
-version = "3.0.0"
+version = "3.1.0"
 dependencies = [
  "base32",
  "hex",

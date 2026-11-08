@@ -12,3 +12,6 @@ path = "src/main.rs"
 [dependencies]
 ftc-core = { path = "../core" }
 hex = { workspace = true }
+
+[dev-dependencies]
+ureq = { workspace = true }

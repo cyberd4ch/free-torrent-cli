@@ -11,6 +11,8 @@ pub enum Error {
     Storage(String),
     Seed(String),
     Dht(String),
+    /// The caller asked the run to stop (web UI cancel, Ctrl-C handler).
+    Cancelled,
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -27,6 +29,7 @@ impl fmt::Display for Error {
             Error::Storage(msg) => write!(f, "storage error: {msg}"),
             Error::Seed(msg) => write!(f, "seed error: {msg}"),
             Error::Dht(msg) => write!(f, "dht error: {msg}"),
+            Error::Cancelled => write!(f, "cancelled"),
         }
     }
 }

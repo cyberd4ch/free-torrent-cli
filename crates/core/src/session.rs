@@ -98,6 +98,7 @@ pub struct Session {
     options: Options,
     dht: Option<Dht>,
     resumed: usize,
+    stop: Arc<AtomicBool>,
 }
 
 impl Session {
@@ -140,12 +141,19 @@ impl Session {
             options,
             dht: None,
             resumed,
+            stop: Arc::new(AtomicBool::new(false)),
         };
         Ok((session, progress))
     }
 
     pub fn torrent(&self) -> &Torrent {
         &self.torrent
+    }
+
+    /// A flag that stops the run at its next checkpoint; `run` then returns
+    /// [`Error::Cancelled`]. This is how the web UI cancels a job.
+    pub fn stop_handle(&self) -> Arc<AtomicBool> {
+        self.stop.clone()
     }
 
     /// Run to completion, using `explicit_peers` when supplied (tests, `--peer`).
@@ -161,6 +169,9 @@ impl Session {
             }
         }
         loop {
+            if self.stop.load(Ordering::Relaxed) {
+                return Err(Error::Cancelled);
+            }
             let remaining = self.missing.lock().unwrap().len();
             if remaining == 0 {
                 self.progress.done.store(true, Ordering::Relaxed);
@@ -180,6 +191,9 @@ impl Session {
             }
 
             self.spawn_workers();
+            if self.stop.load(Ordering::Relaxed) {
+                return Err(Error::Cancelled);
+            }
             if self.missing.lock().unwrap().is_empty() {
                 break;
             }

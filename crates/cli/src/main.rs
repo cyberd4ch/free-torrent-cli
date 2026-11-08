@@ -1,3 +1,6 @@
+mod http;
+mod serve;
+
 use ftc_core::session::Options;
 use ftc_core::{magnet, Session, Snapshot, Torrent};
 use std::net::SocketAddr;
@@ -21,6 +24,24 @@ OPTIONS:
         --seed <secs>     after finishing, serve pieces to peers for <secs>s
     -h, --help            show this help
     -V, --version         show the version
+
+SUBCOMMANDS:
+    serve                 run the web ui on http://127.0.0.1:8080
+";
+
+const SERVE_USAGE: &str = "\
+ftc serve — the web ui
+
+USAGE:
+    ftc serve [options]
+
+OPTIONS:
+        --bind <addr>     interface to listen on (default: 127.0.0.1)
+        --port <n>        port to listen on (default: 8080, 0 picks a free one)
+    -o, --output <dir>    default download directory (default: current directory)
+        --max-peers <n>   simultaneous peer connections (default: 6)
+        --no-dht          skip DHT peer discovery (trackers only)
+    -h, --help            show this help
 ";
 
 fn main() -> ExitCode {
@@ -34,7 +55,11 @@ fn main() -> ExitCode {
 }
 
 fn run() -> Result<(), String> {
-    let mut args = std::env::args().skip(1);
+    let argv: Vec<String> = std::env::args().skip(1).collect();
+    if argv.first().map(String::as_str) == Some("serve") {
+        return serve_command(&argv[1..]);
+    }
+    let mut args = argv.into_iter();
     let mut target: Option<String> = None;
     let mut output = PathBuf::from(".");
     let mut peers: Option<Vec<SocketAddr>> = None;
@@ -194,6 +219,67 @@ fn run() -> Result<(), String> {
         }
         Err(err) => Err(err.to_string()),
     }
+}
+
+fn serve_command(args: &[String]) -> Result<(), String> {
+    let mut bind = String::from("127.0.0.1");
+    let mut port: u16 = 8080;
+    let mut output = PathBuf::from(".");
+    let mut options = Options::default();
+    let mut index = 0;
+
+    while index < args.len() {
+        match args[index].as_str() {
+            "-h" | "--help" => {
+                print!("{SERVE_USAGE}");
+                return Ok(());
+            }
+            "--bind" => {
+                bind = args
+                    .get(index + 1)
+                    .ok_or("--bind needs an address")?
+                    .clone();
+                index += 2;
+            }
+            "--port" => {
+                port = args
+                    .get(index + 1)
+                    .ok_or("--port needs a number")?
+                    .parse()
+                    .map_err(|err| format!("bad --port: {err}"))?;
+                index += 2;
+            }
+            "-o" | "--output" => {
+                output = PathBuf::from(args.get(index + 1).ok_or("--output needs a directory")?);
+                index += 2;
+            }
+            "--max-peers" => {
+                options.max_peers = args
+                    .get(index + 1)
+                    .ok_or("--max-peers needs a number")?
+                    .parse()
+                    .map_err(|err| format!("bad --max-peers: {err}"))?;
+                if options.max_peers == 0 {
+                    return Err("--max-peers must be at least 1".into());
+                }
+                index += 2;
+            }
+            "--no-dht" => {
+                options.use_dht = false;
+                index += 1;
+            }
+            other => return Err(format!("unknown serve option {other}\n\n{SERVE_USAGE}")),
+        }
+    }
+
+    let server = serve::Server::bind(&bind, port, output, options)
+        .map_err(|err| format!("cannot listen on {bind}:{port}: {err}"))?;
+    let addr = server
+        .addr()
+        .map_err(|err| format!("cannot read the listening address: {err}"))?;
+    println!("ftc web ui -> http://{addr}");
+    println!("Ctrl-C to stop");
+    server.serve().map_err(|err| err.to_string())
 }
 
 fn percent_of(snapshot: &Snapshot) -> u32 {

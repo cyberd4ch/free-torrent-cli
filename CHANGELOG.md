@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.1.0] - 2026-11-08
+
+### Added
+- **Web UI (`ftc serve`).** A local single-page interface on `http://127.0.0.1:8080`:
+  paste a magnet or a `.torrent` path, watch progress, speed, peers and ETA, and
+  cancel a job. Served by a small hand-written HTTP/1.1 server in `crates/cli/src/http.rs`,
+  so the dependency count stays at six and the binary stays self-contained.
+- **JSON API** behind the UI: `GET /api/state`, `POST /api/add`, `POST /api/cancel`
+  (form-encoded). Jobs report the engine's own `Progress` counters — the UI polls the
+  same atomics the CLI renders from, so the two can never disagree.
+- **Cancellation in the engine.** `Session::stop_handle()` returns a flag that is
+  checked between peer refills and after each worker round; the run ends with
+  `Error::Cancelled`.
+
 ## [3.0.0] - 2026-11-08
 
 First release of the Rust client. Prebuilt `ftc` binaries for Linux x86_64,

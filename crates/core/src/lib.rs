@@ -5,7 +5,8 @@
 //! SHA-1 piece verification, multi-file storage, resume scanning, a
 //! downloading session, a seeder, and DHT (BEP 5) peer discovery with announce.
 //!
-//! Not yet ported (tracked in the README): the desktop/web front ends.
+//! The web UI lives in the CLI (`ftc serve`) on top of this crate; a desktop
+//! front end is still unbuilt (tracked in the README).
 
 pub mod bencode;
 pub mod dht;
