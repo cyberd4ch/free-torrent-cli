@@ -31,10 +31,11 @@ SUBCOMMANDS:
 ";
 
 const SERVE_USAGE: &str = "\
-ftc serve — the web ui
+ftc serve / ftc gui — the web ui
 
 USAGE:
-    ftc serve [options]
+    ftc serve [options]     headless, prints the url
+    ftc gui [options]       opens the page in your browser
 
 OPTIONS:
         --bind <addr>     interface to listen on (default: 127.0.0.1)
