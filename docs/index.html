@@ -5,14 +5,14 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description"
-        content="FreeTorrent — a lightweight, open-source BitTorrent client for Mac, Windows and Linux. Built from scratch with Node.js." />
-    <meta property="og:title" content="FreeTorrent" />
+        content="ftc — a BitTorrent client in one ~3 MB Rust binary. From scratch: HTTP and UDP trackers, DHT, magnet metadata exchange, SHA-1 verification, seeding. No libtorrent, no Electron, no runtime." />
+    <meta property="og:title" content="ftc — free-torrent-cli" />
     <meta property="og:description"
-        content="A lightweight open-source BitTorrent client. No ads. No tracking. Just downloads." />
-    <title>FreeTorrent — Lightweight BitTorrent Client</title>
+        content="A BitTorrent client in a single ~3 MB binary. Rust, from scratch, no runtime to install." />
+    <title>ftc — a BitTorrent client in 3 MB</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link
-        href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=Fira+Code:wght@300;400&display=swap"
+        href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=Fira+Code:wght@300;400;500&display=swap"
         rel="stylesheet" />
     <style>
         /* ── Reset ────────────────────────────────────────────────────────────── */
@@ -25,19 +25,18 @@
         }
 
         :root {
-            --black: #080810;
-            --dark: #0e0e1a;
-            --card: #13131f;
-            --border: #1e1e30;
-            --border2: #2a2a42;
+            --black: #07070d;
+            --dark: #0d0d16;
+            --card: #12121d;
+            --border: #1d1d2e;
+            --border2: #2b2b42;
             --cyan: #00e5ff;
-            --purple: #7b5ea7;
+            --purple: #b088f9;
             --green: #00ff88;
-            --white: #f0f0fa;
-            --muted: #6666888;
-            --dim: #888899;
-            --mono: 'Fira Code', monospace;
-            --display: 'Syne', sans-serif;
+            --white: #f1f1fa;
+            --dim: #85859c;
+            --mono: 'Fira Code', ui-monospace, monospace;
+            --display: 'Syne', system-ui, sans-serif;
         }
 
         html {
@@ -50,17 +49,32 @@
             font-family: var(--display);
             min-height: 100vh;
             overflow-x: hidden;
+            -webkit-font-smoothing: antialiased;
         }
 
-        /* ── Noise texture overlay ────────────────────────────────────────────── */
+        /* Faint grid, no texture image */
         body::before {
             content: '';
             position: fixed;
             inset: 0;
-            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+            background-image:
+                linear-gradient(to right, rgba(255, 255, 255, .035) 1px, transparent 1px),
+                linear-gradient(to bottom, rgba(255, 255, 255, .035) 1px, transparent 1px);
+            background-size: 64px 64px;
+            mask-image: radial-gradient(circle at 50% 0%, #000 0%, transparent 72%);
+            -webkit-mask-image: radial-gradient(circle at 50% 0%, #000 0%, transparent 72%);
             pointer-events: none;
             z-index: 0;
-            opacity: 0.6;
+        }
+
+        a {
+            color: inherit;
+            text-decoration: none;
+        }
+
+        code,
+        pre {
+            font-family: var(--mono);
         }
 
         /* ── Nav ──────────────────────────────────────────────────────────────── */
@@ -73,9 +87,9 @@
             display: flex;
             align-items: center;
             justify-content: space-between;
-            padding: 20px 48px;
-            background: rgba(8, 8, 16, 0.8);
-            backdrop-filter: blur(16px);
+            padding: 18px 32px;
+            background: rgba(7, 7, 13, .78);
+            backdrop-filter: blur(14px);
             border-bottom: 1px solid var(--border);
         }
 
@@ -83,64 +97,44 @@
             display: flex;
             align-items: center;
             gap: 10px;
-            text-decoration: none;
-            color: var(--white);
         }
 
         .nav-logo-mark {
-            width: 32px;
-            height: 32px;
-            border: 1.5px solid var(--cyan);
-            border-radius: 8px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            position: relative;
-        }
-
-        .nav-logo-mark::after {
-            content: '';
-            width: 10px;
-            height: 10px;
-            border-radius: 50%;
-            background: var(--cyan);
-            animation: pulse 2.4s ease-in-out infinite;
-        }
-
-        @keyframes pulse {
-
-            0%,
-            100% {
-                transform: scale(1);
-                opacity: 1;
-            }
-
-            50% {
-                transform: scale(0.6);
-                opacity: 0.4;
-            }
+            width: 26px;
+            height: 26px;
+            border-radius: 7px;
+            background: linear-gradient(135deg, var(--cyan), var(--purple));
+            box-shadow: 0 0 18px rgba(0, 229, 255, .35);
         }
 
         .nav-logo-name {
-            font-size: 15px;
             font-weight: 800;
-            letter-spacing: 0.04em;
+            font-size: 17px;
+            letter-spacing: -.02em;
+        }
+
+        .nav-logo-name span {
+            font-family: var(--mono);
+            font-size: 10px;
+            font-weight: 400;
+            color: var(--dim);
+            margin-left: 8px;
+            letter-spacing: .04em;
         }
 
         .nav-links {
             display: flex;
             align-items: center;
-            gap: 32px;
+            gap: 28px;
             list-style: none;
         }
 
         .nav-links a {
-            color: var(--dim);
-            text-decoration: none;
             font-family: var(--mono);
             font-size: 12px;
-            letter-spacing: 0.06em;
-            transition: color 0.2s;
+            color: var(--dim);
+            letter-spacing: .04em;
+            transition: color .2s;
         }
 
         .nav-links a:hover {
@@ -148,119 +142,83 @@
         }
 
         .nav-github {
-            display: flex;
+            display: inline-flex;
             align-items: center;
-            gap: 6px;
-            color: var(--white) !important;
+            gap: 7px;
+            padding: 8px 14px;
             border: 1px solid var(--border2);
-            padding: 7px 14px;
-            border-radius: 6px;
-            transition: border-color 0.2s, background 0.2s !important;
+            border-radius: 8px;
+            color: var(--white) !important;
         }
 
         .nav-github:hover {
-            border-color: var(--cyan) !important;
-            background: rgba(0, 229, 255, 0.06) !important;
+            border-color: var(--cyan);
         }
 
         /* ── Hero ─────────────────────────────────────────────────────────────── */
         .hero {
             position: relative;
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
+            z-index: 1;
+            padding: 150px 24px 72px;
             text-align: center;
-            padding: 120px 24px 80px;
-            overflow: hidden;
-        }
-
-        /* Radial glow */
-        .hero::after {
-            content: '';
-            position: absolute;
-            width: 800px;
-            height: 800px;
-            border-radius: 50%;
-            background: radial-gradient(circle, rgba(0, 229, 255, 0.07) 0%, rgba(123, 94, 167, 0.04) 40%, transparent 70%);
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            pointer-events: none;
-        }
-
-        /* Grid lines */
-        .hero-grid {
-            position: absolute;
-            inset: 0;
-            background-image:
-                linear-gradient(rgba(30, 30, 48, 0.5) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(30, 30, 48, 0.5) 1px, transparent 1px);
-            background-size: 48px 48px;
-            mask-image: radial-gradient(ellipse 70% 70% at 50% 50%, black 30%, transparent 100%);
-            pointer-events: none;
+            max-width: 1080px;
+            margin: 0 auto;
         }
 
         .hero-badge {
             display: inline-flex;
             align-items: center;
-            gap: 8px;
+            gap: 9px;
+            padding: 7px 15px;
+            border: 1px solid var(--border2);
+            border-radius: 999px;
+            background: rgba(0, 229, 255, .04);
             font-family: var(--mono);
             font-size: 11px;
-            color: var(--cyan);
-            border: 1px solid rgba(0, 229, 255, 0.25);
-            background: rgba(0, 229, 255, 0.06);
-            padding: 6px 14px;
-            border-radius: 20px;
-            letter-spacing: 0.1em;
-            margin-bottom: 32px;
-            position: relative;
-            z-index: 1;
-            animation: fadeUp 0.6s ease both;
+            letter-spacing: .05em;
+            color: var(--white);
+            margin-bottom: 34px;
         }
 
         .hero-badge-dot {
             width: 6px;
             height: 6px;
             border-radius: 50%;
-            background: var(--cyan);
-            animation: pulse 1.6s ease-in-out infinite;
+            background: var(--green);
+            box-shadow: 0 0 10px var(--green);
         }
 
         .hero-title {
-            font-size: clamp(52px, 10vw, 96px);
+            font-size: clamp(44px, 9vw, 96px);
             font-weight: 800;
-            line-height: 0.95;
-            letter-spacing: -0.03em;
-            position: relative;
-            z-index: 1;
-            animation: fadeUp 0.6s 0.1s ease both;
+            line-height: .94;
+            letter-spacing: -.045em;
+            margin-bottom: 26px;
         }
 
         .hero-title-line1 {
             display: block;
-            color: var(--white);
         }
 
         .hero-title-line2 {
             display: block;
-            background: linear-gradient(135deg, var(--cyan) 0%, var(--purple) 100%);
+            background: linear-gradient(120deg, var(--cyan), var(--purple));
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
         }
 
         .hero-sub {
-            margin-top: 28px;
-            font-family: var(--mono);
-            font-size: 15px;
+            font-size: clamp(15px, 1.9vw, 19px);
+            line-height: 1.65;
             color: var(--dim);
-            line-height: 1.7;
-            max-width: 520px;
-            position: relative;
-            z-index: 1;
-            animation: fadeUp 0.6s 0.2s ease both;
+            max-width: 620px;
+            margin: 0 auto 38px;
+        }
+
+        .hero-sub b {
+            color: var(--white);
+            font-weight: 700;
         }
 
         .hero-sub span {
@@ -268,200 +226,192 @@
         }
 
         .hero-cta {
-            margin-top: 48px;
             display: flex;
             align-items: center;
-            gap: 16px;
-            flex-wrap: wrap;
             justify-content: center;
-            position: relative;
-            z-index: 1;
-            animation: fadeUp 0.6s 0.3s ease both;
+            gap: 14px;
+            flex-wrap: wrap;
+            margin-bottom: 44px;
         }
 
-        .btn-primary {
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            padding: 14px 28px;
-            background: var(--cyan);
-            color: var(--black);
-            font-family: var(--display);
-            font-size: 14px;
-            font-weight: 700;
-            letter-spacing: 0.04em;
-            border-radius: 8px;
-            text-decoration: none;
-            transition: transform 0.2s, box-shadow 0.2s;
-            border: none;
-            cursor: pointer;
-        }
-
-        .btn-primary:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 32px rgba(0, 229, 255, 0.3);
-        }
-
+        .btn-primary,
         .btn-secondary {
             display: inline-flex;
             align-items: center;
-            gap: 8px;
-            padding: 14px 28px;
-            background: transparent;
-            color: var(--white);
-            font-family: var(--display);
+            gap: 9px;
+            padding: 14px 24px;
+            border-radius: 10px;
             font-size: 14px;
             font-weight: 700;
-            letter-spacing: 0.04em;
-            border-radius: 8px;
-            text-decoration: none;
+            transition: transform .15s, box-shadow .2s, border-color .2s;
+        }
+
+        .btn-primary {
+            background: var(--white);
+            color: var(--black);
+            box-shadow: 0 8px 30px rgba(255, 255, 255, .12);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 12px 36px rgba(0, 229, 255, .22);
+        }
+
+        .btn-secondary {
             border: 1px solid var(--border2);
-            transition: border-color 0.2s, background 0.2s;
-            cursor: pointer;
+            color: var(--white);
+            font-family: var(--mono);
+            font-size: 12px;
+            font-weight: 400;
         }
 
         .btn-secondary:hover {
-            border-color: var(--white);
-            background: rgba(240, 240, 250, 0.04);
+            border-color: var(--cyan);
+        }
+
+        /* one-line install strip */
+        .hero-oneshot {
+            display: inline-flex;
+            align-items: center;
+            gap: 12px;
+            max-width: 100%;
+            padding: 13px 18px;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            background: var(--dark);
+            font-family: var(--mono);
+            font-size: 12px;
+            color: var(--dim);
+            overflow-x: auto;
+        }
+
+        .hero-oneshot .pill {
+            flex: none;
+            padding: 3px 8px;
+            border-radius: 5px;
+            background: rgba(0, 229, 255, .1);
+            color: var(--cyan);
+            font-size: 10px;
+            letter-spacing: .06em;
+        }
+
+        .hero-oneshot code {
+            color: var(--white);
+            white-space: nowrap;
         }
 
         .hero-stats {
-            margin-top: 64px;
             display: flex;
             align-items: center;
-            gap: 48px;
-            position: relative;
-            z-index: 1;
-            animation: fadeUp 0.6s 0.4s ease both;
+            justify-content: center;
+            gap: 34px;
+            margin-top: 54px;
+            flex-wrap: wrap;
         }
 
         .hero-stat-value {
-            font-size: 28px;
+            font-size: 26px;
             font-weight: 800;
-            color: var(--white);
+            letter-spacing: -.03em;
         }
 
         .hero-stat-label {
             font-family: var(--mono);
-            font-size: 11px;
+            font-size: 10px;
+            letter-spacing: .12em;
             color: var(--dim);
-            letter-spacing: 0.08em;
-            margin-top: 2px;
+            margin-top: 4px;
         }
 
         .hero-stat-divider {
             width: 1px;
-            height: 40px;
-            background: var(--border);
+            height: 32px;
+            background: var(--border2);
         }
 
-        @keyframes fadeUp {
-            from {
-                opacity: 0;
-                transform: translateY(20px);
-            }
-
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        /* ── Download section ─────────────────────────────────────────────────── */
+        /* ── Sections ─────────────────────────────────────────────────────────── */
         .section {
-            padding: 96px 24px;
-            max-width: 1080px;
-            margin: 0 auto;
             position: relative;
             z-index: 1;
+            padding: 84px 24px;
+            max-width: 1080px;
+            margin: 0 auto;
         }
 
         .section-label {
             font-family: var(--mono);
             font-size: 11px;
+            letter-spacing: .1em;
             color: var(--cyan);
-            letter-spacing: 0.15em;
-            text-transform: uppercase;
-            margin-bottom: 16px;
+            margin-bottom: 12px;
         }
 
         .section-title {
-            font-size: clamp(32px, 5vw, 52px);
+            font-size: clamp(28px, 4.5vw, 44px);
             font-weight: 800;
-            letter-spacing: -0.02em;
-            margin-bottom: 16px;
+            letter-spacing: -.035em;
+            margin-bottom: 12px;
         }
 
         .section-sub {
-            font-family: var(--mono);
-            font-size: 13px;
             color: var(--dim);
-            line-height: 1.7;
-            max-width: 480px;
-            margin-bottom: 56px;
+            font-size: 15px;
+            line-height: 1.6;
+            max-width: 560px;
+            margin-bottom: 40px;
         }
 
-        /* ── Platform cards ───────────────────────────────────────────────────── */
+        /* ── Download cards ───────────────────────────────────────────────────── */
         .platform-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(268px, 1fr));
             gap: 16px;
         }
 
         .platform-card {
-            background: var(--card);
-            border: 1px solid var(--border);
-            border-radius: 12px;
-            padding: 32px;
             position: relative;
-            overflow: hidden;
-            transition: border-color 0.2s, transform 0.2s;
+            padding: 24px;
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            background: var(--card);
+            transition: border-color .2s, transform .2s;
         }
 
         .platform-card:hover {
             border-color: var(--border2);
-            transform: translateY(-4px);
+            transform: translateY(-2px);
         }
 
         .platform-card.featured {
-            border-color: rgba(0, 229, 255, 0.3);
-        }
-
-        .platform-card.featured::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            height: 1px;
-            background: linear-gradient(90deg, transparent, var(--cyan), transparent);
+            border-color: rgba(0, 229, 255, .35);
+            box-shadow: 0 0 0 1px rgba(0, 229, 255, .06), 0 20px 50px -30px rgba(0, 229, 255, .5);
         }
 
         .platform-icon {
-            font-size: 40px;
-            margin-bottom: 20px;
+            font-size: 22px;
             display: block;
+            margin-bottom: 14px;
         }
 
         .platform-name {
-            font-size: 22px;
-            font-weight: 800;
-            margin-bottom: 6px;
+            font-size: 19px;
+            font-weight: 700;
+            letter-spacing: -.02em;
         }
 
         .platform-version {
             font-family: var(--mono);
             font-size: 11px;
-            color: var(--dim);
-            margin-bottom: 20px;
+            color: var(--cyan);
+            margin: 5px 0 14px;
         }
 
         .platform-requirements {
-            font-family: var(--mono);
-            font-size: 11px;
+            font-size: 13px;
+            line-height: 1.6;
             color: var(--dim);
-            margin-bottom: 28px;
-            line-height: 1.8;
+            margin-bottom: 20px;
+            min-height: 42px;
         }
 
         .platform-requirements span {
@@ -471,71 +421,96 @@
         .platform-downloads {
             display: flex;
             flex-direction: column;
-            gap: 8px;
+            gap: 9px;
         }
 
         .download-btn {
             display: flex;
             align-items: center;
             justify-content: space-between;
-            padding: 10px 14px;
-            border-radius: 6px;
+            gap: 12px;
+            padding: 12px 14px;
             border: 1px solid var(--border2);
+            border-radius: 9px;
             background: var(--dark);
-            color: var(--white);
-            text-decoration: none;
-            font-family: var(--mono);
-            font-size: 11px;
-            transition: border-color 0.15s, background 0.15s;
-            cursor: pointer;
+            transition: border-color .2s, background .2s;
         }
 
         .download-btn:hover {
             border-color: var(--cyan);
-            background: rgba(0, 229, 255, 0.05);
-            color: var(--cyan);
+            background: rgba(0, 229, 255, .05);
         }
 
         .download-btn-label {
-            display: flex;
+            display: inline-flex;
             align-items: center;
             gap: 8px;
+            font-family: var(--mono);
+            font-size: 11.5px;
+            color: var(--white);
         }
 
         .download-btn-size {
+            font-family: var(--mono);
+            font-size: 10.5px;
             color: var(--dim);
-            font-size: 10px;
+            flex: none;
         }
 
-        /* ── Install instructions ─────────────────────────────────────────────── */
+        .checksum-note {
+            margin-top: 22px;
+            font-family: var(--mono);
+            font-size: 11.5px;
+            line-height: 1.9;
+            color: var(--dim);
+            padding: 16px 18px;
+            border: 1px dashed var(--border2);
+            border-radius: 10px;
+        }
+
+        .checksum-note a {
+            color: var(--cyan);
+            border-bottom: 1px solid rgba(0, 229, 255, .3);
+        }
+
+        .checksum-note code {
+            color: var(--white);
+        }
+
+        /* ── Install tabs ─────────────────────────────────────────────────────── */
         .install-tabs {
-            margin-top: 64px;
+            margin-top: 72px;
         }
 
         .tab-list {
             display: flex;
-            gap: 0;
-            border-bottom: 1px solid var(--border);
-            margin-bottom: 32px;
+            gap: 8px;
+            margin-bottom: 22px;
+            flex-wrap: wrap;
         }
 
         .tab-btn {
+            padding: 9px 16px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: transparent;
+            color: var(--dim);
             font-family: var(--mono);
             font-size: 12px;
-            padding: 12px 20px;
-            background: transparent;
-            border: none;
-            color: var(--dim);
             cursor: pointer;
-            border-bottom: 2px solid transparent;
-            margin-bottom: -1px;
-            transition: color 0.2s, border-color 0.2s;
-            letter-spacing: 0.06em;
+            transition: all .18s;
+        }
+
+        .tab-btn:hover {
+            color: var(--white);
+            border-color: var(--border2);
         }
 
         .tab-btn.active {
-            color: var(--cyan);
-            border-bottom-color: var(--cyan);
+            background: var(--white);
+            color: var(--black);
+            border-color: var(--white);
+            font-weight: 500;
         }
 
         .tab-panel {
@@ -547,121 +522,116 @@
         }
 
         .install-steps {
-            display: flex;
-            flex-direction: column;
-            gap: 16px;
+            display: grid;
+            gap: 10px;
         }
 
         .install-step {
             display: flex;
-            gap: 20px;
-            align-items: flex-start;
+            gap: 16px;
+            padding: 16px 18px;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            background: var(--card);
         }
 
         .step-num {
-            width: 28px;
-            height: 28px;
-            border-radius: 50%;
-            border: 1px solid var(--border2);
-            display: flex;
-            align-items: center;
-            justify-content: center;
+            flex: none;
+            width: 24px;
+            height: 24px;
+            display: grid;
+            place-items: center;
+            border-radius: 6px;
+            background: rgba(0, 229, 255, .1);
+            color: var(--cyan);
             font-family: var(--mono);
             font-size: 11px;
-            color: var(--cyan);
-            flex-shrink: 0;
-            margin-top: 2px;
-        }
-
-        .step-content {
-            flex: 1;
         }
 
         .step-title {
             font-size: 14px;
             font-weight: 700;
-            margin-bottom: 6px;
+            margin-bottom: 5px;
         }
 
         .step-desc {
-            font-family: var(--mono);
-            font-size: 12px;
+            font-size: 13px;
+            line-height: 1.6;
             color: var(--dim);
-            line-height: 1.7;
         }
 
         .step-code {
-            margin-top: 10px;
-            background: var(--dark);
+            margin-top: 9px;
+            padding: 10px 12px;
+            border-radius: 7px;
+            background: var(--black);
             border: 1px solid var(--border);
-            border-radius: 6px;
-            padding: 12px 16px;
             font-family: var(--mono);
-            font-size: 12px;
-            color: var(--green);
+            font-size: 11.5px;
+            color: var(--white);
             overflow-x: auto;
+            white-space: pre;
         }
 
         /* ── Features ─────────────────────────────────────────────────────────── */
         .features-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
             gap: 1px;
             background: var(--border);
             border: 1px solid var(--border);
-            border-radius: 12px;
+            border-radius: 14px;
             overflow: hidden;
         }
 
         .feature-cell {
+            padding: 26px;
             background: var(--card);
-            padding: 32px 28px;
-            transition: background 0.2s;
-        }
-
-        .feature-cell:hover {
-            background: var(--dark);
         }
 
         .feature-icon {
-            font-size: 24px;
-            margin-bottom: 16px;
+            font-size: 20px;
+            margin-bottom: 12px;
         }
 
         .feature-title {
-            font-size: 16px;
+            font-size: 15px;
             font-weight: 700;
             margin-bottom: 8px;
         }
 
         .feature-desc {
-            font-family: var(--mono);
-            font-size: 12px;
+            font-size: 13px;
+            line-height: 1.65;
             color: var(--dim);
-            line-height: 1.7;
         }
 
-        /* ── Terminal demo ────────────────────────────────────────────────────── */
+        .feature-desc code {
+            color: var(--cyan);
+            font-size: 12px;
+        }
+
+        /* ── Terminal ─────────────────────────────────────────────────────────── */
         .terminal {
-            background: var(--card);
-            border: 1px solid var(--border);
+            margin-top: 40px;
+            border: 1px solid var(--border2);
             border-radius: 12px;
+            background: #05050a;
             overflow: hidden;
-            margin-top: 48px;
         }
 
         .terminal-bar {
             display: flex;
             align-items: center;
-            gap: 8px;
-            padding: 12px 16px;
-            background: var(--dark);
+            gap: 7px;
+            padding: 11px 14px;
             border-bottom: 1px solid var(--border);
+            background: var(--dark);
         }
 
         .terminal-dot {
-            width: 12px;
-            height: 12px;
+            width: 10px;
+            height: 10px;
             border-radius: 50%;
         }
 
@@ -678,18 +648,19 @@
         }
 
         .terminal-title {
-            margin-left: auto;
-            margin-right: auto;
+            margin-left: 8px;
             font-family: var(--mono);
             font-size: 11px;
             color: var(--dim);
         }
 
         .terminal-body {
-            padding: 24px;
+            padding: 20px;
             font-family: var(--mono);
-            font-size: 13px;
-            line-height: 2;
+            font-size: 12.5px;
+            line-height: 1.85;
+            color: var(--dim);
+            overflow-x: auto;
         }
 
         .t-prompt {
@@ -700,31 +671,31 @@
             color: var(--white);
         }
 
-        .t-out {
-            color: var(--dim);
-        }
-
         .t-cyan {
             color: var(--cyan);
         }
 
-        .t-purple {
-            color: #b088f9;
+        .t-green {
+            color: var(--green);
+        }
+
+        .t-out {
+            color: var(--dim);
         }
 
         /* ── Footer ───────────────────────────────────────────────────────────── */
         footer {
             border-top: 1px solid var(--border);
-            padding: 48px 24px;
+            padding: 46px 24px;
             text-align: center;
             position: relative;
             z-index: 1;
         }
 
         .footer-logo {
-            font-size: 20px;
+            font-size: 19px;
             font-weight: 800;
-            margin-bottom: 12px;
+            margin-bottom: 14px;
             background: linear-gradient(135deg, var(--cyan), var(--purple));
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
@@ -734,18 +705,18 @@
         .footer-links {
             display: flex;
             justify-content: center;
-            gap: 32px;
+            gap: 28px;
             list-style: none;
-            margin-bottom: 24px;
+            margin-bottom: 22px;
+            flex-wrap: wrap;
         }
 
         .footer-links a {
             font-family: var(--mono);
             font-size: 11px;
             color: var(--dim);
-            text-decoration: none;
-            letter-spacing: 0.06em;
-            transition: color 0.2s;
+            letter-spacing: .05em;
+            transition: color .2s;
         }
 
         .footer-links a:hover {
@@ -756,12 +727,13 @@
             font-family: var(--mono);
             font-size: 11px;
             color: var(--dim);
+            line-height: 1.8;
         }
 
         /* ── Responsive ───────────────────────────────────────────────────────── */
         @media (max-width: 768px) {
             nav {
-                padding: 16px 20px;
+                padding: 14px 18px;
             }
 
             .nav-links {
@@ -769,15 +741,20 @@
             }
 
             .hero {
-                padding: 100px 20px 60px;
+                padding: 116px 18px 56px;
             }
 
             .hero-stats {
-                gap: 24px;
+                gap: 22px;
             }
 
             .section {
-                padding: 64px 20px;
+                padding: 60px 18px;
+            }
+
+            .install-step {
+                flex-direction: column;
+                gap: 10px;
             }
         }
     </style>
@@ -789,15 +766,16 @@
     <nav>
         <a href="#" class="nav-logo">
             <div class="nav-logo-mark"></div>
-            <span class="nav-logo-name">FreeTorrent</span>
+            <span class="nav-logo-name">ftc<span>free-torrent-cli</span></span>
         </a>
         <ul class="nav-links">
             <li><a href="#download">Download</a></li>
-            <li><a href="#features">Features</a></li>
             <li><a href="#install">Install</a></li>
+            <li><a href="#features">Features</a></li>
             <li>
-                <a href="https://github.com/cyberd4ch/free-torrent-cli" target="_blank" class="nav-github">
-                    <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                <a href="https://github.com/cyberd4ch/free-torrent-cli" target="_blank" rel="noopener"
+                    class="nav-github">
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
                         <path
                             d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z" />
                     </svg>
@@ -809,54 +787,64 @@
 
     <!-- Hero -->
     <section class="hero">
-        <div class="hero-grid"></div>
-
         <div class="hero-badge">
             <span class="hero-badge-dot"></span>
-            v2.0.0 — Now with GUI
+            v3.0.0 — rewritten in Rust
         </div>
 
         <h1 class="hero-title">
             <span class="hero-title-line1">Torrents.</span>
-            <span class="hero-title-line2">Simplified.</span>
+            <span class="hero-title-line2">In 3 MB.</span>
         </h1>
 
         <p class="hero-sub">
-            A <span>lightweight</span>, open-source BitTorrent client built from scratch.
-            No ads. No tracking. No bloat. Just fast, verified downloads.
+            <b>ftc</b> is a BitTorrent client compiled to one static binary.
+            No libtorrent, no Electron, no runtime to install — the wire protocol,
+            trackers, DHT and seeding are written <span>from scratch</span> in Rust.
         </p>
 
         <div class="hero-cta">
             <a href="#download" class="btn-primary">
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
                     <path
                         d="M8 0a8 8 0 100 16A8 8 0 008 0zm3.5 7.5l-3 3a.75.75 0 01-1.06 0l-3-3a.75.75 0 011.06-1.06L7 7.94V3.75a.75.75 0 011.5 0v4.19l1.5-1.5a.75.75 0 011.5 1.06z" />
                 </svg>
-                Download Free
+                Download the binary
             </a>
-            <a href="https://github.com/cyberd4ch/free-torrent-cli" target="_blank" class="btn-secondary">
-                <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+            <a href="https://github.com/cyberd4ch/free-torrent-cli" target="_blank" rel="noopener"
+                class="btn-secondary">
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
                     <path
                         d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z" />
                 </svg>
-                View Source
+                Read the source
             </a>
+        </div>
+
+        <div class="hero-oneshot">
+            <span class="pill">macOS ARM</span>
+            <code>curl -L -o ftc https://github.com/cyberd4ch/free-torrent-cli/releases/latest/download/ftc-macos-arm64 &amp;&amp; chmod +x ftc</code>
         </div>
 
         <div class="hero-stats">
             <div>
-                <div class="hero-stat-value">76</div>
+                <div class="hero-stat-value">~3 MB</div>
+                <div class="hero-stat-label">STATIC BINARY</div>
+            </div>
+            <div class="hero-stat-divider"></div>
+            <div>
+                <div class="hero-stat-value">37</div>
                 <div class="hero-stat-label">TESTS PASSING</div>
             </div>
             <div class="hero-stat-divider"></div>
             <div>
-                <div class="hero-stat-value">0</div>
-                <div class="hero-stat-label">DEPENDENCIES*</div>
+                <div class="hero-stat-value">4</div>
+                <div class="hero-stat-label">PLATFORMS</div>
             </div>
             <div class="hero-stat-divider"></div>
             <div>
-                <div class="hero-stat-value">3</div>
-                <div class="hero-stat-label">PLATFORMS</div>
+                <div class="hero-stat-value">0</div>
+                <div class="hero-stat-label">RUNTIMES</div>
             </div>
         </div>
     </section>
@@ -865,7 +853,10 @@
     <section class="section" id="download">
         <div class="section-label">// get it</div>
         <h2 class="section-title">Download</h2>
-        <p class="section-sub">Choose your platform. Free, forever. No account required.</p>
+        <p class="section-sub">
+            One file per platform, straight from the release. No installer, no account,
+            no sign-up — download it, <code>chmod +x</code>, run it.
+        </p>
 
         <div class="platform-grid">
 
@@ -873,33 +864,33 @@
             <div class="platform-card featured">
                 <span class="platform-icon">🍎</span>
                 <div class="platform-name">macOS</div>
-                <div class="platform-version">FreeTorrent v2.0.0</div>
+                <div class="platform-version">ftc v3.0.0</div>
                 <div class="platform-requirements">
-                    Requires <span>macOS 11+</span><br />
-                    Apple Silicon &amp; Intel supported
+                    <span>macOS 11+</span><br />
+                    Apple silicon &amp; Intel
                 </div>
                 <div class="platform-downloads">
                     <a class="download-btn"
-                        href="https://github.com/cyberd4ch/free-torrent-cli/releases/latest/download/FreeTorrent-mac-arm64.dmg">
+                        href="https://github.com/cyberd4ch/free-torrent-cli/releases/latest/download/ftc-macos-arm64">
                         <span class="download-btn-label">
-                            <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
+                            <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
                                 <path
                                     d="M8 0a8 8 0 100 16A8 8 0 008 0zm3.5 7.5l-3 3a.75.75 0 01-1.06 0l-3-3a.75.75 0 011.06-1.06L7 7.94V3.75a.75.75 0 011.5 0v4.19l1.5-1.5a.75.75 0 011.5 1.06z" />
                             </svg>
-                            Apple Silicon (arm64) .dmg
+                            ftc-macos-arm64
                         </span>
-                        <span class="download-btn-size">~85 MB</span>
+                        <span class="download-btn-size">2.9 MB</span>
                     </a>
                     <a class="download-btn"
-                        href="https://github.com/cyberd4ch/free-torrent-cli/releases/latest/download/FreeTorrent-mac-x64.dmg">
+                        href="https://github.com/cyberd4ch/free-torrent-cli/releases/latest/download/ftc-macos-x86_64">
                         <span class="download-btn-label">
-                            <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
+                            <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
                                 <path
                                     d="M8 0a8 8 0 100 16A8 8 0 008 0zm3.5 7.5l-3 3a.75.75 0 01-1.06 0l-3-3a.75.75 0 011.06-1.06L7 7.94V3.75a.75.75 0 011.5 0v4.19l1.5-1.5a.75.75 0 011.5 1.06z" />
                             </svg>
-                            Intel (x64) .dmg
+                            ftc-macos-x86_64
                         </span>
-                        <span class="download-btn-size">~90 MB</span>
+                        <span class="download-btn-size">3.0 MB</span>
                     </a>
                 </div>
             </div>
@@ -908,33 +899,22 @@
             <div class="platform-card">
                 <span class="platform-icon">🪟</span>
                 <div class="platform-name">Windows</div>
-                <div class="platform-version">FreeTorrent v2.0.0</div>
+                <div class="platform-version">ftc v3.0.0</div>
                 <div class="platform-requirements">
-                    Requires <span>Windows 10+</span><br />
-                    64-bit only
+                    <span>Windows 10+</span><br />
+                    64-bit, portable executable
                 </div>
                 <div class="platform-downloads">
                     <a class="download-btn"
-                        href="https://github.com/cyberd4ch/free-torrent-cli/releases/latest/download/FreeTorrent-Setup-x64.exe">
+                        href="https://github.com/cyberd4ch/free-torrent-cli/releases/latest/download/ftc-windows-x86_64.exe">
                         <span class="download-btn-label">
-                            <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
+                            <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
                                 <path
                                     d="M8 0a8 8 0 100 16A8 8 0 008 0zm3.5 7.5l-3 3a.75.75 0 01-1.06 0l-3-3a.75.75 0 011.06-1.06L7 7.94V3.75a.75.75 0 011.5 0v4.19l1.5-1.5a.75.75 0 011.5 1.06z" />
                             </svg>
-                            Installer (x64) .exe
+                            ftc-windows-x86_64.exe
                         </span>
-                        <span class="download-btn-size">~95 MB</span>
-                    </a>
-                    <a class="download-btn"
-                        href="https://github.com/cyberd4ch/free-torrent-cli/releases/latest/download/FreeTorrent-Portable-x64.exe">
-                        <span class="download-btn-label">
-                            <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
-                                <path
-                                    d="M8 0a8 8 0 100 16A8 8 0 008 0zm3.5 7.5l-3 3a.75.75 0 01-1.06 0l-3-3a.75.75 0 011.06-1.06L7 7.94V3.75a.75.75 0 011.5 0v4.19l1.5-1.5a.75.75 0 011.5 1.06z" />
-                            </svg>
-                            Portable .exe
-                        </span>
-                        <span class="download-btn-size">~90 MB</span>
+                        <span class="download-btn-size">2.4 MB</span>
                     </a>
                 </div>
             </div>
@@ -943,49 +923,48 @@
             <div class="platform-card">
                 <span class="platform-icon">🐧</span>
                 <div class="platform-name">Linux</div>
-                <div class="platform-version">FreeTorrent v2.0.0</div>
+                <div class="platform-version">ftc v3.0.0</div>
                 <div class="platform-requirements">
-                    Ubuntu 18.04+, Fedora, Arch<br />
-                    <span>x64 &amp; arm64</span>
+                    <span>x86_64 glibc</span><br />
+                    Any distro — nothing to satisfy
                 </div>
                 <div class="platform-downloads">
                     <a class="download-btn"
-                        href="https://github.com/cyberd4ch/free-torrent-cli/releases/latest/download/FreeTorrent-x86_64.AppImage">
+                        href="https://github.com/cyberd4ch/free-torrent-cli/releases/latest/download/ftc-linux-x86_64">
                         <span class="download-btn-label">
-                            <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
+                            <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
                                 <path
                                     d="M8 0a8 8 0 100 16A8 8 0 008 0zm3.5 7.5l-3 3a.75.75 0 01-1.06 0l-3-3a.75.75 0 011.06-1.06L7 7.94V3.75a.75.75 0 011.5 0v4.19l1.5-1.5a.75.75 0 011.5 1.06z" />
                             </svg>
-                            AppImage (universal)
+                            ftc-linux-x86_64
                         </span>
-                        <span class="download-btn-size">~88 MB</span>
-                    </a>
-                    <a class="download-btn"
-                        href="https://github.com/cyberd4ch/free-torrent-cli/releases/latest/download/FreeTorrent-amd64.deb">
-                        <span class="download-btn-label">
-                            <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
-                                <path
-                                    d="M8 0a8 8 0 100 16A8 8 0 008 0zm3.5 7.5l-3 3a.75.75 0 01-1.06 0l-3-3a.75.75 0 011.06-1.06L7 7.94V3.75a.75.75 0 011.5 0v4.19l1.5-1.5a.75.75 0 011.5 1.06z" />
-                            </svg>
-                            Debian / Ubuntu .deb
-                        </span>
-                        <span class="download-btn-size">~82 MB</span>
+                        <span class="download-btn-size">3.4 MB</span>
                     </a>
                 </div>
             </div>
 
         </div>
 
-        <!-- Install tabs -->
+        <div class="checksum-note">
+            Every release ships <a
+                href="https://github.com/cyberd4ch/free-torrent-cli/releases/latest/download/SHA256SUMS">SHA256SUMS</a>
+            — verify before running:<br />
+            <code>curl -LO …/releases/latest/download/SHA256SUMS &amp;&amp; shasum -a 256 -c SHA256SUMS --ignore-missing</code>
+        </div>
+    </section>
+
+    <!-- Install -->
+    <section class="section">
         <div class="install-tabs" id="install">
-            <div class="section-label" style="margin-top:64px">// how to install</div>
-            <h2 class="section-title" style="font-size:clamp(24px,4vw,36px);margin-bottom:32px">Get running in 60
-                seconds</h2>
+            <div class="section-label">// how to install</div>
+            <h2 class="section-title" style="font-size:clamp(24px,4vw,36px);margin-bottom:28px">
+                Running in under a minute
+            </h2>
 
             <div class="tab-list">
-                <button class="tab-btn active" onclick="switchTab('mac')">🍎 macOS</button>
-                <button class="tab-btn" onclick="switchTab('win')">🪟 Windows</button>
-                <button class="tab-btn" onclick="switchTab('linux')">🐧 Linux</button>
+                <button class="tab-btn active" onclick="switchTab('mac', event)">🍎 macOS</button>
+                <button class="tab-btn" onclick="switchTab('win', event)">🪟 Windows</button>
+                <button class="tab-btn" onclick="switchTab('linux', event)">🐧 Linux</button>
             </div>
 
             <div id="tab-mac" class="tab-panel active">
@@ -993,33 +972,28 @@
                     <div class="install-step">
                         <div class="step-num">1</div>
                         <div class="step-content">
-                            <div class="step-title">Download the .dmg</div>
-                            <div class="step-desc">Choose Apple Silicon (arm64) for M1/M2/M3 Macs, or Intel (x64) for
-                                older Macs.</div>
+                            <div class="step-title">Fetch the binary</div>
+                            <div class="step-desc">Apple silicon for M-series Macs; the x86_64 build runs on Intel
+                                (and on Apple silicon under Rosetta).</div>
+                            <div class="step-code">curl -L -o ftc https://github.com/cyberd4ch/free-torrent-cli/releases/latest/download/ftc-macos-arm64</div>
                         </div>
                     </div>
                     <div class="install-step">
                         <div class="step-num">2</div>
                         <div class="step-content">
-                            <div class="step-title">Open the installer</div>
-                            <div class="step-desc">Double-click the .dmg file. Drag FreeTorrent into your Applications
-                                folder.</div>
+                            <div class="step-title">Make it executable</div>
+                            <div class="step-desc">Unsigned binaries are quarantined by Gatekeeper; clearing the
+                                attribute is enough.</div>
+                            <div class="step-code">chmod +x ftc &amp;&amp; xattr -d com.apple.quarantine ftc 2&gt;/dev/null; ./ftc --version</div>
                         </div>
                     </div>
                     <div class="install-step">
                         <div class="step-num">3</div>
                         <div class="step-content">
-                            <div class="step-title">Launch FreeTorrent</div>
-                            <div class="step-desc">Open Launchpad or Applications and click FreeTorrent. On first launch
-                                macOS may ask you to confirm — click Open.</div>
-                        </div>
-                    </div>
-                    <div class="install-step">
-                        <div class="step-num">4</div>
-                        <div class="step-content">
-                            <div class="step-title">Add a torrent</div>
-                            <div class="step-desc">Click "Add Torrent", choose a .torrent file, and the download begins
-                                automatically.</div>
+                            <div class="step-title">Download something</div>
+                            <div class="step-desc">A torrent file or a magnet URI — the magnet path fetches metadata
+                                from peers over BEP 9/10.</div>
+                            <div class="step-code">./ftc ./some.torrent -o ./downloads</div>
                         </div>
                     </div>
                 </div>
@@ -1030,24 +1004,26 @@
                     <div class="install-step">
                         <div class="step-num">1</div>
                         <div class="step-content">
-                            <div class="step-title">Download the installer</div>
-                            <div class="step-desc">Download FreeTorrent-Setup-x64.exe for a full install, or the
-                                Portable .exe to run without installing.</div>
+                            <div class="step-title">Fetch the executable</div>
+                            <div class="step-desc">Portable — there is no installer and nothing is written outside the
+                                output directory.</div>
+                            <div class="step-code">curl.exe -Lo ftc.exe https://github.com/cyberd4ch/free-torrent-cli/releases/latest/download/ftc-windows-x86_64.exe</div>
                         </div>
                     </div>
                     <div class="install-step">
                         <div class="step-num">2</div>
                         <div class="step-content">
-                            <div class="step-title">Run the installer</div>
-                            <div class="step-desc">Double-click the .exe. Windows SmartScreen may warn you — click "More
-                                info" then "Run anyway". FreeTorrent is open source and safe.</div>
+                            <div class="step-title">Check it runs</div>
+                            <div class="step-desc">SmartScreen may warn on an unsigned binary: "More info" → "Run
+                                anyway".</div>
+                            <div class="step-code">.\ftc.exe --version</div>
                         </div>
                     </div>
                     <div class="install-step">
                         <div class="step-num">3</div>
                         <div class="step-content">
-                            <div class="step-title">Launch from Start Menu</div>
-                            <div class="step-desc">Find FreeTorrent in the Start Menu or on your Desktop shortcut.</div>
+                            <div class="step-title">Download something</div>
+                            <div class="step-code">.\ftc.exe .\some.torrent -o .\downloads</div>
                         </div>
                     </div>
                 </div>
@@ -1058,29 +1034,30 @@
                     <div class="install-step">
                         <div class="step-num">1</div>
                         <div class="step-content">
-                            <div class="step-title">Download the AppImage</div>
-                            <div class="step-desc">The AppImage works on any Linux distro without installation.</div>
+                            <div class="step-title">Fetch the binary</div>
+                            <div class="step-code">curl -L -o ftc https://github.com/cyberd4ch/free-torrent-cli/releases/latest/download/ftc-linux-x86_64</div>
                         </div>
                     </div>
                     <div class="install-step">
                         <div class="step-num">2</div>
                         <div class="step-content">
-                            <div class="step-title">Make it executable</div>
-                            <div class="step-code">chmod +x FreeTorrent-*.AppImage</div>
+                            <div class="step-title">Install it on your PATH</div>
+                            <div class="step-code">chmod +x ftc &amp;&amp; sudo mv ftc /usr/local/bin/ &amp;&amp; ftc --version</div>
                         </div>
                     </div>
                     <div class="install-step">
                         <div class="step-num">3</div>
                         <div class="step-content">
-                            <div class="step-title">Run it</div>
-                            <div class="step-code">./FreeTorrent-*.AppImage</div>
+                            <div class="step-title">Download something</div>
+                            <div class="step-code">ftc ./some.torrent -o ./downloads</div>
                         </div>
                     </div>
                     <div class="install-step">
                         <div class="step-num">4</div>
                         <div class="step-content">
-                            <div class="step-title">Or install the .deb (Ubuntu/Debian)</div>
-                            <div class="step-code">sudo dpkg -i FreeTorrent-amd64.deb</div>
+                            <div class="step-title">Verify a checksum first, if you like</div>
+                            <div class="step-code">curl -LO https://github.com/cyberd4ch/free-torrent-cli/releases/latest/download/SHA256SUMS
+sha256sum -c SHA256SUMS --ignore-missing</div>
                         </div>
                     </div>
                 </div>
@@ -1092,44 +1069,47 @@
     <section class="section" id="features">
         <div class="section-label">// what's inside</div>
         <h2 class="section-title">Built different</h2>
-        <p class="section-sub">No libtorrent. No shortcuts. Every protocol byte written by hand.</p>
+        <p class="section-sub">
+            No libtorrent. No shortcuts. Every protocol byte is this repository's own code —
+            which is why the whole client fits in one binary.
+        </p>
 
         <div class="features-grid">
             <div class="feature-cell">
+                <div class="feature-icon">🦀</div>
+                <div class="feature-title">One static binary</div>
+                <div class="feature-desc">Rust, compiled ahead of time. Nothing to <code>npm install</code>, no
+                    runtime to keep updated, no 90 MB app bundle to unpack on first launch.</div>
+            </div>
+            <div class="feature-cell">
                 <div class="feature-icon">🔐</div>
-                <div class="feature-title">SHA-1 Verification</div>
-                <div class="feature-desc">Every piece is hashed and verified before writing to disk. Corrupt data is
-                    automatically discarded and re-downloaded.</div>
+                <div class="feature-title">SHA-1 verification</div>
+                <div class="feature-desc">Every piece is hashed before it reaches disk. A corrupt piece is re-queued,
+                    not written; a peer that keeps serving garbage is dropped.</div>
+            </div>
+            <div class="feature-cell">
+                <div class="feature-icon">🧭</div>
+                <div class="feature-title">Magnets and DHT</div>
+                <div class="feature-desc">A trackerless magnet hunts peers through the DHT (BEP 5), fetches the
+                    <code>info</code> dictionary over BEP 9/10, and verifies it against the info hash.</div>
             </div>
             <div class="feature-cell">
                 <div class="feature-icon">🔄</div>
-                <div class="feature-title">Resume Downloads</div>
-                <div class="feature-desc">Restart anytime. Existing pieces are SHA-1 verified on startup and only clean
-                    data is skipped.</div>
-            </div>
-            <div class="feature-cell">
-                <div class="feature-icon">📁</div>
-                <div class="feature-title">Multi-file Torrents</div>
-                <div class="feature-desc">Correctly maps pieces across file boundaries. Handles any torrent layout —
-                    single file or complex multi-directory structures.</div>
+                <div class="feature-title">Resume from disk</div>
+                <div class="feature-desc">Existing pieces are re-verified on startup, so a restart continues where it
+                    stopped instead of starting over.</div>
             </div>
             <div class="feature-cell">
                 <div class="feature-icon">⬆️</div>
-                <div class="feature-title">Seeds While Downloading</div>
-                <div class="feature-desc">Starts seeding verified pieces immediately. Continues seeding automatically
-                    after the download completes.</div>
+                <div class="feature-title">Honest seeding</div>
+                <div class="feature-desc"><code>--seed 60</code> serves verified pieces only. The Bitfield is built from
+                    what actually checks out — a half-downloaded folder never claims it has the rest.</div>
             </div>
             <div class="feature-cell">
-                <div class="feature-icon">🌐</div>
-                <div class="feature-title">UDP + HTTP Trackers</div>
-                <div class="feature-desc">Speaks both tracker protocols. Falls back to HTTP automatically when UDP is
-                    blocked by your network.</div>
-            </div>
-            <div class="feature-cell">
-                <div class="feature-icon">⚡</div>
-                <div class="feature-title">Zero Bloat</div>
-                <div class="feature-desc">No ads, no auto-updates calling home, no telemetry. The engine is ~7 files of
-                    plain Node.js. Read every line on GitHub.</div>
+                <div class="feature-icon">🛡️</div>
+                <div class="feature-title">Safe by default</div>
+                <div class="feature-desc">Torrent paths with <code>..</code>, absolute paths or separators are
+                    rejected; peer frames are capped at 2 MiB before allocation.</div>
             </div>
         </div>
 
@@ -1139,57 +1119,52 @@
                 <div class="terminal-dot red"></div>
                 <div class="terminal-dot yellow"></div>
                 <div class="terminal-dot green"></div>
-                <div class="terminal-title">free-torrent-cli — bash</div>
+                <div class="terminal-title">ftc — bash</div>
             </div>
             <div class="terminal-body">
-                <div><span class="t-prompt">→</span> <span class="t-cmd">node index.js
-                        kali-linux-2026.1-arm64.iso.torrent ~/Downloads</span></div>
+                <div><span class="t-prompt">→</span> <span class="t-cmd">ftc kali-linux-2026.1-installer-arm64.iso.torrent -o ./downloads</span></div>
                 <div class="t-out">&nbsp;</div>
-                <div><span class="t-cyan"> free-torrent-cli</span></div>
-                <div class="t-out"> ─────────────────────────────────────────────</div>
-                <div><span class="t-out"> Name : </span><span class="t-cmd">kali-linux-2026.1-installer-arm64.iso</span>
-                </div>
-                <div><span class="t-out"> Size : </span><span class="t-cmd">3967.46 MB</span></div>
-                <div><span class="t-out"> Pieces : </span><span class="t-cmd">15135 × 256 KiB</span></div>
-                <div class="t-out"> ─────────────────────────────────────────────</div>
+                <div><span class="t-out"> Name    </span><span class="t-cmd">kali-linux-2026.1-installer-arm64.iso</span></div>
+                <div><span class="t-out"> Size    </span><span class="t-cmd">3967.46 MB</span></div>
+                <div><span class="t-out"> Pieces  </span><span class="t-cmd">15135 &times; 256 KiB</span></div>
                 <div class="t-out">&nbsp;</div>
-                <div><span class="t-out"> Checking for existing progress... </span><span class="t-green">resumed
-                        412/15135 pieces verified ✓</span></div>
+                <div><span class="t-out"> Resuming — </span><span class="t-green">412/15135 pieces verified</span></div>
+                <div><span class="t-out"> Announcing to 1 UDP + 3 HTTP tracker(s)</span></div>
+                <div><span class="t-cyan"> Peers found: 50 — connecting to 6</span></div>
                 <div class="t-out">&nbsp;</div>
-                <div><span class="t-out"> Found 1 UDP + 3 HTTP tracker(s)...</span></div>
-                <div><span class="t-out"> Using tracker: </span><span
-                        class="t-purple">http://bittorrent.kali.org/announce</span></div>
-                <div><span class="t-cyan"> Got 50 peers!</span></div>
-                <div class="t-out">&nbsp;</div>
-                <div><span class="t-out"> ████████░░░░░░░░ </span><span class="t-cmd">52.3%</span></div>
-                <div><span class="t-out"> ↓ </span><span class="t-cyan">2.1 MB/s</span><span class="t-out"> ↑
-                    </span><span class="t-green">340 KB/s</span><span class="t-out"> | ETA </span><span
-                        class="t-cmd">28m 14s</span><span class="t-out"> | Peers ↓</span><span
-                        class="t-cmd">8</span><span class="t-out"> ↑</span><span class="t-cmd">2</span><span
-                        class="t-out"> | ✓ </span><span class="t-cmd">7912</span></div>
+                <div><span class="t-cmd">[██████████░░░░░░░░░░░░░░░░░░]  47%  9/19  1.8 MiB/s  4 peers</span></div>
+                <div><span class="t-out">&nbsp;</span></div>
+                <div><span class="t-green"> Done — 15135/15135 pieces verified, seeding for 300s</span></div>
             </div>
         </div>
     </section>
 
     <!-- Footer -->
     <footer>
-        <div class="footer-logo">FreeTorrent</div>
+        <div class="footer-logo">ftc</div>
         <ul class="footer-links">
-            <li><a href="https://github.com/cyberd4ch/free-torrent-cli" target="_blank">GitHub</a></li>
-            <li><a href="https://github.com/cyberd4ch/free-torrent-cli/releases" target="_blank">Releases</a></li>
-            <li><a href="https://github.com/cyberd4ch/free-torrent-cli/issues" target="_blank">Report a Bug</a></li>
-            <li><a href="https://github.com/cyberd4ch/free-torrent-cli/blob/main/LICENSE" target="_blank">MIT
-                    License</a></li>
+            <li><a href="https://github.com/cyberd4ch/free-torrent-cli" target="_blank" rel="noopener">GitHub</a></li>
+            <li><a href="https://github.com/cyberd4ch/free-torrent-cli/releases" target="_blank"
+                    rel="noopener">Releases</a></li>
+            <li><a href="https://github.com/cyberd4ch/free-torrent-cli/blob/main/CHANGELOG.md" target="_blank"
+                    rel="noopener">Changelog</a></li>
+            <li><a href="https://github.com/cyberd4ch/free-torrent-cli/issues" target="_blank" rel="noopener">Report a
+                    Bug</a></li>
+            <li><a href="https://github.com/cyberd4ch/free-torrent-cli/blob/main/LICENSE" target="_blank"
+                    rel="noopener">MIT License</a></li>
         </ul>
-        <div class="footer-copy">© 2025 dach-a · Built from scratch with Node.js · No libtorrent · No shortcuts</div>
+        <div class="footer-copy">
+            © 2026 dach-a · written in Rust · no libtorrent · no Electron · no telemetry
+        </div>
     </footer>
 
     <script>
-        function switchTab(platform) {
+        function switchTab(platform, ev) {
+            const btn = ev ? ev.currentTarget : null;
             document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
             document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
             document.getElementById(`tab-${platform}`).classList.add('active');
-            event.target.classList.add('active');
+            if (btn) btn.classList.add('active');
         }
     </script>
 </body>
