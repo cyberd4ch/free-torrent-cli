@@ -17,6 +17,12 @@ use std::sync::{Arc, Mutex};
 
 const UI: &str = include_str!("ui.html");
 
+/// Served at `/favicon.ico` so a browser never logs a failed icon request.
+const ICON: &str = "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'>\
+<rect width='32' height='32' rx='8' fill='#111318'/>\
+<g fill='none' stroke='#ff7a2f' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'>\
+<path d='M16 7v13'/><path d='M10 15l6 6 6-6'/><path d='M8 26h16'/></g></svg>";
+
 pub struct Server {
     listener: TcpListener,
     state: Arc<State>,
@@ -38,6 +44,7 @@ struct Job {
     total: u64,
     progress: Option<Arc<Progress>>,
     stop: Option<Arc<AtomicBool>>,
+    pause: Option<Arc<AtomicBool>>,
     error: Option<String>,
 }
 
@@ -93,8 +100,14 @@ fn route(state: &Arc<State>, request: &Request) -> (u16, &'static str, Vec<u8>) 
         ("GET", "/api/state") => (200, JSON, state_json(state).into_bytes()),
         ("POST", "/api/add") => add(state, &request.body),
         ("POST", "/api/cancel") => cancel(state, &request.body),
-        ("GET", "/favicon.ico") => (204, "image/x-icon", Vec::new()),
-        (_, "/api/add") | (_, "/api/cancel") | (_, "/api/state") => (
+        ("POST", "/api/pause") => pause(state, &request.body, true),
+        ("POST", "/api/resume") => pause(state, &request.body, false),
+        (_, "/favicon.ico") => (200, "image/svg+xml", ICON.as_bytes().to_vec()),
+        (_, "/api/add")
+        | (_, "/api/cancel")
+        | (_, "/api/pause")
+        | (_, "/api/resume")
+        | (_, "/api/state") => (
             405,
             "text/plain; charset=utf-8",
             b"method not allowed".to_vec(),
@@ -118,6 +131,15 @@ fn add(state: &Arc<State>, body: &str) -> (u16, &'static str, Vec<u8>) {
     let output = field("output")
         .map(PathBuf::from)
         .unwrap_or_else(|| state.default_output.clone());
+    // A browser hands over the directory the user typed; make it instead of
+    // failing the whole download because it did not exist yet.
+    if let Err(err) = std::fs::create_dir_all(&output) {
+        return (
+            400,
+            "text/plain; charset=utf-8",
+            format!("cannot create {}: {err}", output.display()).into_bytes(),
+        );
+    }
 
     let id = state.next_id.fetch_add(1, Ordering::Relaxed);
     state.jobs.lock().unwrap().push(Job {
@@ -129,6 +151,7 @@ fn add(state: &Arc<State>, body: &str) -> (u16, &'static str, Vec<u8>) {
         total: 0,
         progress: None,
         stop: None,
+        pause: None,
         error: None,
     });
     spawn_download(state.clone(), id, target, output);
@@ -173,6 +196,43 @@ fn cancel(state: &Arc<State>, body: &str) -> (u16, &'static str, Vec<u8>) {
     )
 }
 
+fn pause(state: &Arc<State>, body: &str, paused: bool) -> (u16, &'static str, Vec<u8>) {
+    let form = http::form_pairs(body);
+    let id = form
+        .iter()
+        .find(|(key, _)| key == "id")
+        .and_then(|(_, value)| value.parse::<u64>().ok());
+    let Some(id) = id else {
+        return (400, "text/plain; charset=utf-8", b"missing id".to_vec());
+    };
+
+    let mut jobs = state.jobs.lock().unwrap();
+    let Some(job) = jobs.iter_mut().find(|job| job.id == id) else {
+        return (404, "text/plain; charset=utf-8", b"no such job".to_vec());
+    };
+    if matches!(job.status, "done" | "error" | "cancelled") {
+        return (
+            400,
+            "text/plain; charset=utf-8",
+            b"job already finished".to_vec(),
+        );
+    }
+    let Some(flag) = job.pause.clone() else {
+        return (
+            400,
+            "text/plain; charset=utf-8",
+            b"job is still resolving metadata".to_vec(),
+        );
+    };
+    flag.store(paused, Ordering::Relaxed);
+    job.status = if paused { "paused" } else { "downloading" };
+    (
+        200,
+        "application/json",
+        format!("{{\"id\":{id},\"paused\":{paused}}}").into_bytes(),
+    )
+}
+
 fn spawn_download(state: Arc<State>, id: u64, target: String, output: PathBuf) {
     std::thread::spawn(move || {
         let torrent = match resolve(&target, &state.options) {
@@ -188,6 +248,7 @@ fn spawn_download(state: Arc<State>, id: u64, target: String, output: PathBuf) {
             Err(err) => return finish(&state, id, "error", Some(err.to_string())),
         };
         let stop = session.stop_handle();
+        let pause = session.pause_handle();
         let name = session.torrent().name.clone();
         let total = session.torrent().total_length;
         {
@@ -202,6 +263,7 @@ fn spawn_download(state: Arc<State>, id: u64, target: String, output: PathBuf) {
             job.total = total;
             job.progress = Some(progress);
             job.stop = Some(stop);
+            job.pause = Some(pause);
             job.status = "downloading";
         }
 
@@ -345,12 +407,42 @@ mod tests {
     }
 
     #[test]
+    fn serves_a_real_favicon_instead_of_a_failed_request() {
+        let addr = spawn();
+        let icon = ureq::get(&format!("http://{addr}/favicon.ico"))
+            .call()
+            .unwrap();
+        assert_eq!(icon.status(), 200);
+        assert_eq!(icon.content_type(), "image/svg+xml");
+        assert!(icon.into_string().unwrap().contains("<svg"));
+    }
+
+    #[test]
+    fn pause_and_resume_reject_unknown_jobs() {
+        let addr = spawn();
+        for endpoint in ["pause", "resume"] {
+            let missing = ureq::post(&format!("http://{addr}/api/{endpoint}"))
+                .set("Content-Type", "application/x-www-form-urlencoded")
+                .send_string("");
+            assert_eq!(missing.unwrap_err().into_response().unwrap().status(), 400);
+
+            let unknown = ureq::post(&format!("http://{addr}/api/{endpoint}"))
+                .set("Content-Type", "application/x-www-form-urlencoded")
+                .send_string("id=404");
+            assert_eq!(unknown.unwrap_err().into_response().unwrap().status(), 404);
+        }
+    }
+
+    #[test]
     fn reports_a_torrent_that_cannot_be_read() {
         let addr = spawn();
         ureq::post(&format!("http://{addr}/api/add"))
             .set("Content-Type", "application/x-www-form-urlencoded")
             .send_string("target=/nonexistent/file.torrent&output=/tmp")
             .unwrap();
+
+        // The default output directory is created on demand, so the error the
+        // UI shows is about the torrent, not about a missing folder.
 
         let mut body = String::new();
         for _ in 0..80 {

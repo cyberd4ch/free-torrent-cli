@@ -99,6 +99,7 @@ pub struct Session {
     dht: Option<Dht>,
     resumed: usize,
     stop: Arc<AtomicBool>,
+    pause: Arc<AtomicBool>,
 }
 
 impl Session {
@@ -142,6 +143,7 @@ impl Session {
             dht: None,
             resumed,
             stop: Arc::new(AtomicBool::new(false)),
+            pause: Arc::new(AtomicBool::new(false)),
         };
         Ok((session, progress))
     }
@@ -154,6 +156,24 @@ impl Session {
     /// [`Error::Cancelled`]. This is how the web UI cancels a job.
     pub fn stop_handle(&self) -> Arc<AtomicBool> {
         self.stop.clone()
+    }
+
+    /// A flag that parks the run in place: no new pieces are requested while it
+    /// is set, and clearing it continues from the same queue. This is how the
+    /// web UI pauses a job without losing verified progress.
+    pub fn pause_handle(&self) -> Arc<AtomicBool> {
+        self.pause.clone()
+    }
+
+    /// Block while paused, returning `Err(Cancelled)` if a stop arrives meanwhile.
+    fn wait_while_paused(&self) -> Result<()> {
+        while self.pause.load(Ordering::Relaxed) {
+            if self.stop.load(Ordering::Relaxed) {
+                return Err(Error::Cancelled);
+            }
+            std::thread::sleep(Duration::from_millis(100));
+        }
+        Ok(())
     }
 
     /// Run to completion, using `explicit_peers` when supplied (tests, `--peer`).
@@ -172,6 +192,7 @@ impl Session {
             if self.stop.load(Ordering::Relaxed) {
                 return Err(Error::Cancelled);
             }
+            self.wait_while_paused()?;
             let remaining = self.missing.lock().unwrap().len();
             if remaining == 0 {
                 self.progress.done.store(true, Ordering::Relaxed);
@@ -285,6 +306,8 @@ impl Session {
             peers: self.peers.clone(),
             progress: self.progress.clone(),
             peer_id: self.peer_id,
+            stop: self.stop.clone(),
+            pause: self.pause.clone(),
         }
     }
 }
@@ -297,11 +320,24 @@ struct Shared {
     peers: Arc<Mutex<VecDeque<SocketAddr>>>,
     progress: Arc<Progress>,
     peer_id: [u8; 20],
+    stop: Arc<AtomicBool>,
+    pause: Arc<AtomicBool>,
 }
 
 impl Shared {
     fn worker_loop(&self) {
         loop {
+            if self.stop.load(Ordering::Relaxed) {
+                return;
+            }
+            // Park here rather than finishing the in-flight piece round: a paused
+            // job stops touching the network within one block.
+            while self.pause.load(Ordering::Relaxed) {
+                if self.stop.load(Ordering::Relaxed) {
+                    return;
+                }
+                std::thread::sleep(Duration::from_millis(50));
+            }
             let piece = match self.missing.lock().unwrap().pop_front() {
                 Some(piece) => piece,
                 None => return,
@@ -534,6 +570,54 @@ mod tests {
         assert!(progress.snapshot().done);
         let written = std::fs::read(dir.join("payload.bin")).unwrap();
         assert_eq!(written.len(), 40_000);
+
+        let _ = server.join();
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_paused_run_does_not_finish_until_it_is_resumed() {
+        let data: Vec<u8> = (0..40_000u32).map(|index| (index % 251) as u8).collect();
+        let piece_length = 16_384usize;
+        let raw = single_file_torrent("paused.bin", &data, piece_length);
+        let torrent = Torrent::parse(&raw).unwrap();
+        let pieces = torrent.piece_count();
+        let info_hash = torrent.info_hash;
+
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        let server =
+            std::thread::spawn(move || fake_peer(listener, data, piece_length, pieces, info_hash));
+
+        let dir = std::env::temp_dir().join(format!("ftc-pause-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let (session, _progress) = Session::open(
+            torrent,
+            &dir,
+            Options {
+                max_peers: 1,
+                port: 6881,
+                use_dht: false,
+            },
+        )
+        .unwrap();
+
+        let pause = session.pause_handle();
+        pause.store(true, Ordering::Relaxed);
+        let gate = pause.clone();
+        std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(400));
+            gate.store(false, Ordering::Relaxed);
+        });
+
+        let stats = session.run(Some(vec![address])).unwrap();
+        assert_eq!(stats.downloaded, 40_000);
+        assert!(
+            stats.elapsed >= Duration::from_millis(400),
+            "the run finished in {:?}, so the pause never blocked it",
+            stats.elapsed
+        );
 
         let _ = server.join();
         let _ = std::fs::remove_dir_all(&dir);

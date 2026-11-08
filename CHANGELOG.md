@@ -15,9 +15,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **JSON API** behind the UI: `GET /api/state`, `POST /api/add`, `POST /api/cancel`
   (form-encoded). Jobs report the engine's own `Progress` counters — the UI polls the
   same atomics the CLI renders from, so the two can never disagree.
+- **Pause and resume.** `Session::pause_handle()` parks workers without dropping
+  verified progress: no new piece is requested while the flag is set, and the
+  download continues from the same queue when it clears. The UI grows
+  Pause/Resume buttons and `POST /api/pause` / `POST /api/resume` back them.
 - **Cancellation in the engine.** `Session::stop_handle()` returns a flag that is
   checked between peer refills and after each worker round; the run ends with
   `Error::Cancelled`.
+- **`ftc gui`** starts the server on a free port, opens it in the default browser
+  and defaults downloads to `~/Downloads` — the double-click path, as opposed to
+  the terminal one. `ftc serve --open` does the same on a chosen port.
+- **Desktop launchers.** `install.sh` writes `~/Applications/ftc.app` on macOS and
+  `~/.local/share/applications/ftc.desktop` on Linux; `install.ps1` adds a Start
+  Menu shortcut. One installed binary, both interfaces.
+
+### Fixed
+- The web UI serves a real SVG favicon instead of answering `204`, so browsers no
+  longer log a failed `/favicon.ico` request.
+- A download directory that does not exist yet is created instead of failing the
+  job.
 
 ## [3.0.0] - 2026-11-08
 

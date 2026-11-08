@@ -5,7 +5,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description"
-        content="ftc — a BitTorrent client in one ~3 MB Rust binary. From scratch: HTTP and UDP trackers, DHT, magnet metadata exchange, SHA-1 verification, seeding. No libtorrent, no Electron, no runtime." />
+        content="ftc — a BitTorrent client in one ~3 MB Rust binary. From scratch: HTTP and UDP trackers, DHT, magnet metadata exchange, SHA-1 verification, seeding, plus a built-in web UI. No libtorrent, no Electron, no runtime." />
     <meta property="og:title" content="ftc — free-torrent-cli" />
     <meta property="og:description"
         content="A BitTorrent client in a single ~3 MB binary. Rust, from scratch, no runtime to install." />
@@ -789,7 +789,7 @@
     <section class="hero">
         <div class="hero-badge">
             <span class="hero-badge-dot"></span>
-            v3.0.0 — rewritten in Rust
+            v3.1.0 — now with a web ui
         </div>
 
         <h1 class="hero-title">
@@ -833,7 +833,7 @@
             </div>
             <div class="hero-stat-divider"></div>
             <div>
-                <div class="hero-stat-value">37</div>
+                <div class="hero-stat-value">48</div>
                 <div class="hero-stat-label">TESTS PASSING</div>
             </div>
             <div class="hero-stat-divider"></div>
@@ -865,7 +865,7 @@
             <div class="platform-card featured">
                 <span class="platform-icon">🍎</span>
                 <div class="platform-name">macOS</div>
-                <div class="platform-version">ftc v3.0.0</div>
+                <div class="platform-version">ftc v3.1.0</div>
                 <div class="platform-requirements">
                     <span>macOS 11+</span><br />
                     Apple silicon &amp; Intel
@@ -900,7 +900,7 @@
             <div class="platform-card">
                 <span class="platform-icon">🪟</span>
                 <div class="platform-name">Windows</div>
-                <div class="platform-version">ftc v3.0.0</div>
+                <div class="platform-version">ftc v3.1.0</div>
                 <div class="platform-requirements">
                     <span>Windows 10+</span><br />
                     64-bit, portable executable
@@ -924,7 +924,7 @@
             <div class="platform-card">
                 <span class="platform-icon">🐧</span>
                 <div class="platform-name">Linux</div>
-                <div class="platform-version">ftc v3.0.0</div>
+                <div class="platform-version">ftc v3.1.0</div>
                 <div class="platform-requirements">
                     <span>x86_64 glibc</span><br />
                     Any distro — nothing to satisfy
@@ -991,10 +991,10 @@
                     <div class="install-step">
                         <div class="step-num">3</div>
                         <div class="step-content">
-                            <div class="step-title">Download something</div>
-                            <div class="step-desc">A torrent file or a magnet URI — the magnet path fetches metadata
-                                from peers over BEP 9/10.</div>
-                            <div class="step-code">./ftc ./some.torrent -o ./downloads</div>
+                            <div class="step-title">Or use the interface</div>
+                            <div class="step-desc">One command: the binary starts a local page and opens your browser.
+                                Downloads land in <code>~/Downloads</code>.</div>
+                            <div class="step-code">ftc gui</div>
                         </div>
                     </div>
                 </div>
@@ -1098,6 +1098,13 @@ sha256sum -c SHA256SUMS --ignore-missing</div>
                     <code>info</code> dictionary over BEP 9/10, and verifies it against the info hash.</div>
             </div>
             <div class="feature-cell">
+                <div class="feature-icon">🖥️</div>
+                <div class="feature-title">A UI, not an app bundle</div>
+                <div class="feature-desc">Run <code>ftc gui</code> and the same binary serves a local page — add a
+                    magnet, watch progress, pause or cancel. No Electron, no second download, and the
+                    CLI is still one argument away.</div>
+            </div>
+            <div class="feature-cell">
                 <div class="feature-icon">🔄</div>
                 <div class="feature-title">Resume from disk</div>
                 <div class="feature-desc">Existing pieces are re-verified on startup, so a restart continues where it
@@ -1126,6 +1133,10 @@ sha256sum -c SHA256SUMS --ignore-missing</div>
                 <div class="terminal-title">ftc — bash</div>
             </div>
             <div class="terminal-body">
+                <div><span class="t-prompt">→</span> <span class="t-cmd">ftc gui</span></div>
+                <div><span class="t-out">ftc web ui -&gt; http://127.0.0.1:51234</span></div>
+                <div><span class="t-out">downloads -&gt; /Users/you/Downloads</span></div>
+                <div class="t-out">&nbsp;</div>
                 <div><span class="t-prompt">→</span> <span class="t-cmd">ftc kali-linux-2026.1-installer-arm64.iso.torrent -o ./downloads</span></div>
                 <div class="t-out">&nbsp;</div>
                 <div><span class="t-out"> Name    </span><span class="t-cmd">kali-linux-2026.1-installer-arm64.iso</span></div>

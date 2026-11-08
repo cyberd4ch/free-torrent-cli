@@ -4,6 +4,8 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="icon" type="image/svg+xml"
+        href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Crect%20width='32'%20height='32'%20rx='8'%20fill='%23111318'/%3E%3Cg%20fill='none'%20stroke='%23ff7a2f'%20stroke-width='3'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpath%20d='M16%207v13'/%3E%3Cpath%20d='M10%2015l6%206%206-6'/%3E%3Cpath%20d='M8%2026h16'/%3E%3C/g%3E%3C/svg%3E" />
     <title>ftc — web ui</title>
     <style>
         :root {
@@ -139,6 +141,7 @@
         .s-done { color: var(--ok); border-color: rgba(61, 220, 132, .45); }
         .s-error { color: var(--err); border-color: rgba(255, 93, 93, .45); }
         .s-metadata { color: #7fb2ff; border-color: rgba(127, 178, 255, .45); }
+        .s-paused { color: #c9b27f; border-color: rgba(201, 178, 127, .45); }
 
         .bar {
             height: 8px;
@@ -177,8 +180,9 @@
             font-size: 12px;
         }
 
-        .cancel {
-            margin-top: 12px;
+        .actions { display: flex; gap: 8px; margin-top: 12px; }
+
+        .job-action {
             padding: 6px 12px;
             color: var(--muted);
             background: transparent;
@@ -187,6 +191,8 @@
             font-size: 12px;
             font-weight: 500;
         }
+
+        .job-action:hover { color: var(--text); border-color: #3a4150; }
 
         footer {
             max-width: 920px;
@@ -312,14 +318,28 @@
             path.textContent = job.output;
             el.append(path);
 
-            if (job.status === "downloading" || job.status === "metadata") {
-                const cancel = document.createElement("button");
-                cancel.className = "cancel";
-                cancel.textContent = "Cancel";
-                cancel.addEventListener("click", () => send("/api/cancel", { id: job.id }));
-                el.append(cancel);
+            if (job.status === "downloading" || job.status === "paused") {
+                const actions = document.createElement("div");
+                actions.className = "actions";
+                actions.append(
+                    job.status === "paused"
+                        ? actionButton("Resume", "/api/resume", job.id)
+                        : actionButton("Pause", "/api/pause", job.id),
+                    actionButton("Cancel", "/api/cancel", job.id),
+                );
+                el.append(actions);
             }
             return el;
+        }
+
+        function actionButton(label, path, id) {
+            const button = document.createElement("button");
+            button.className = "job-action";
+            button.textContent = label;
+            button.addEventListener("click", async () => {
+                if ((await send(path, { id })) !== null) poll();
+            });
+            return button;
         }
 
         function render(jobs) {

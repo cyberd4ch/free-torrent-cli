@@ -44,6 +44,22 @@ try {
         Write-Host "-> added $dest to your user PATH (open a new terminal to use it)"
     }
 
+    # A launcher so the installed binary is a GUI too, not only a command.
+    try {
+        $startMenu = Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs'
+        New-Item -ItemType Directory -Path $startMenu -Force | Out-Null
+        $shortcut = (New-Object -ComObject WScript.Shell).CreateShortcut((Join-Path $startMenu 'ftc.lnk'))
+        $shortcut.TargetPath = (Join-Path $dest 'ftc.exe')
+        $shortcut.Arguments = 'gui'
+        $shortcut.WorkingDirectory = $env:USERPROFILE
+        $shortcut.Description = 'ftc - BitTorrent client (web ui)'
+        $shortcut.Save()
+        Write-Host '-> added ftc to your Start Menu (opens the web ui)'
+    }
+    catch {
+        Write-Host "-> could not create the Start Menu shortcut: $($_.Exception.Message)"
+    }
+
     Write-Host "-> installed $dest\ftc.exe"
     & (Join-Path $dest 'ftc.exe') --version
 }

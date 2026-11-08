@@ -31,6 +31,11 @@ against `SHA256SUMS`, and puts `ftc` on your PATH — `/usr/local/bin` when that
 writable, `~/.local/bin` otherwise. No toolchain, no runtime, no sudo unless you
 ask for it.
 
+It also registers a launcher — `~/Applications/ftc.app` on macOS, a Start Menu
+entry on Windows, `ftc.desktop` on Linux — that runs `ftc gui`. One installed
+binary, both interfaces: the command line when you want it, a browser page when
+you don't.
+
 ```powershell
 # Windows, in PowerShell
 irm https://raw.githubusercontent.com/cyberd4ch/free-torrent-cli/main/install.ps1 | iex
@@ -100,7 +105,8 @@ hash before writing a single byte.
 ## Web UI
 
 ```bash
-ftc serve                        # http://127.0.0.1:8080
+ftc gui                          # web ui, opened in your browser
+ftc serve                        # http://127.0.0.1:8080, terminal only
 ftc serve --port 9000 -o ~/Downloads
 ```
 
@@ -115,10 +121,17 @@ Underneath it is a small JSON API, form-encoded on the way in:
 | :--- | :--- |
 | `GET /api/state` | every job with its live counters |
 | `POST /api/add` | `target=<magnet or path>&output=<dir>` |
+| `POST /api/pause` | `id=<job id>` |
+| `POST /api/resume` | `id=<job id>` |
 | `POST /api/cancel` | `id=<job id>` |
 
 Jobs report the engine's own `Arc<Progress>` atomics, so the page and the
-progress bar in your terminal can never disagree.
+progress bar in your terminal can never disagree. Pause parks the workers without
+touching verified progress; resume continues from the same queue.
+
+`ftc gui` (and `ftc serve --open`) opens the page for you and defaults downloads
+to `~/Downloads`, because a double-clicked launcher has no useful working
+directory.
 
 ## What you get for 3 MB
 

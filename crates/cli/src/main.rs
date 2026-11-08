@@ -27,6 +27,7 @@ OPTIONS:
 
 SUBCOMMANDS:
     serve                 run the web ui on http://127.0.0.1:8080
+    gui                   start the web ui and open it in your browser
 ";
 
 const SERVE_USAGE: &str = "\
@@ -41,6 +42,7 @@ OPTIONS:
     -o, --output <dir>    default download directory (default: current directory)
         --max-peers <n>   simultaneous peer connections (default: 6)
         --no-dht          skip DHT peer discovery (trackers only)
+        --open            also open the page in your browser
     -h, --help            show this help
 ";
 
@@ -56,8 +58,10 @@ fn main() -> ExitCode {
 
 fn run() -> Result<(), String> {
     let argv: Vec<String> = std::env::args().skip(1).collect();
-    if argv.first().map(String::as_str) == Some("serve") {
-        return serve_command(&argv[1..]);
+    match argv.first().map(String::as_str) {
+        Some("serve") => return run_server(&argv[1..], false),
+        Some("gui") => return run_server(&argv[1..], true),
+        _ => {}
     }
     let mut args = argv.into_iter();
     let mut target: Option<String> = None;
@@ -221,10 +225,12 @@ fn run() -> Result<(), String> {
     }
 }
 
-fn serve_command(args: &[String]) -> Result<(), String> {
+fn run_server(args: &[String], gui: bool) -> Result<(), String> {
     let mut bind = String::from("127.0.0.1");
-    let mut port: u16 = 8080;
-    let mut output = PathBuf::from(".");
+    // A double-clicked GUI must not collide with something already on 8080.
+    let mut port: u16 = if gui { 0 } else { 8080 };
+    let mut open = gui;
+    let mut output = default_output(gui);
     let mut options = Options::default();
     let mut index = 0;
 
@@ -268,18 +274,73 @@ fn serve_command(args: &[String]) -> Result<(), String> {
                 options.use_dht = false;
                 index += 1;
             }
+            "--open" => {
+                open = true;
+                index += 1;
+            }
             other => return Err(format!("unknown serve option {other}\n\n{SERVE_USAGE}")),
         }
     }
 
-    let server = serve::Server::bind(&bind, port, output, options)
+    let server = serve::Server::bind(&bind, port, output.clone(), options)
         .map_err(|err| format!("cannot listen on {bind}:{port}: {err}"))?;
     let addr = server
         .addr()
         .map_err(|err| format!("cannot read the listening address: {err}"))?;
-    println!("ftc web ui -> http://{addr}");
-    println!("Ctrl-C to stop");
+    let url = format!("http://{addr}");
+    println!("ftc web ui -> {url}");
+    println!("downloads -> {}", output.display());
+    if open {
+        open_browser(&url);
+    } else {
+        println!("Ctrl-C to stop");
+    }
     server.serve().map_err(|err| err.to_string())
+}
+
+/// Where a double-clicked GUI should put files: never the working directory,
+/// which for a desktop launcher is `/` on macOS.
+fn default_output(gui: bool) -> PathBuf {
+    if !gui {
+        return PathBuf::from(".");
+    }
+    let home = std::env::var_os("HOME").or_else(|| std::env::var_os("USERPROFILE"));
+    let Some(home) = home else {
+        return PathBuf::from(".");
+    };
+    let downloads = PathBuf::from(&home).join("Downloads");
+    if downloads.is_dir() {
+        downloads
+    } else {
+        PathBuf::from(&home)
+    }
+}
+
+fn open_browser(url: &str) {
+    #[cfg(target_os = "macos")]
+    let mut command = {
+        let mut command = std::process::Command::new("open");
+        command.arg(url);
+        command
+    };
+    #[cfg(target_os = "windows")]
+    let mut command = {
+        let mut command = std::process::Command::new("cmd");
+        command.args(["/C", "start", "", url]);
+        command
+    };
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    let mut command = {
+        let mut command = std::process::Command::new("xdg-open");
+        command.arg(url);
+        command
+    };
+
+    match command.status() {
+        Ok(status) if status.success() => {}
+        Ok(status) => eprintln!("ftc: could not open a browser ({status}) — open {url}"),
+        Err(err) => eprintln!("ftc: could not open a browser ({err}) — open {url}"),
+    }
 }
 
 fn percent_of(snapshot: &Snapshot) -> u32 {

@@ -88,6 +88,54 @@ fi
 echo "-> installed $prefix/ftc"
 "$prefix/ftc" --version || true
 
+# One binary, both interfaces: `ftc` in a terminal, and a launcher that runs
+# `ftc gui` (web ui + default browser) for everyone who would rather click.
+version=$("$prefix/ftc" --version 2>/dev/null | awk '{print $2}')
+[ -n "$version" ] || version=unknown
+
+if [ "$OS" = Darwin ]; then
+  apps="${FTC_APPS_DIR:-$HOME/Applications}"
+  app="$apps/ftc.app"
+  mkdir -p "$app/Contents/MacOS"
+  cat > "$app/Contents/MacOS/ftc" <<LAUNCHER
+#!/bin/sh
+exec "$prefix/ftc" gui "\$@"
+LAUNCHER
+  chmod 755 "$app/Contents/MacOS/ftc"
+  cat > "$app/Contents/Info.plist" <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleName</key><string>ftc</string>
+    <key>CFBundleDisplayName</key><string>ftc</string>
+    <key>CFBundleIdentifier</key><string>dev.ftc.webui</string>
+    <key>CFBundleExecutable</key><string>ftc</string>
+    <key>CFBundlePackageType</key><string>APPL</string>
+    <key>CFBundleShortVersionString</key><string>$version</string>
+    <key>CFBundleVersion</key><string>$version</string>
+    <key>LSMinimumSystemVersion</key><string>11.0</string>
+    <key>NSHighResolutionCapable</key><true/>
+</dict>
+</plist>
+PLIST
+  echo "-> installed $app (double-click for the web ui)"
+elif [ "$OS" = Linux ]; then
+  desktop_dir="${FTC_APPS_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}}/applications"
+  mkdir -p "$desktop_dir"
+  cat > "$desktop_dir/ftc.desktop" <<DESKTOP
+[Desktop Entry]
+Type=Application
+Name=ftc
+Comment=BitTorrent client — web ui
+Exec="$prefix/ftc" gui
+Terminal=false
+Categories=Network;FileTransfer;
+DESKTOP
+  chmod 644 "$desktop_dir/ftc.desktop"
+  echo "-> installed $desktop_dir/ftc.desktop"
+fi
+
 case ":$PATH:" in
   *":$prefix:"*) ;;
   *)
