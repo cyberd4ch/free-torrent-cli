@@ -508,14 +508,24 @@ impl Dht {
     /// Send one query, remembering the transaction so its reply can be matched.
     fn ask(&self, action: &Query, address: SocketAddr, transaction: u16) -> Result<()> {
         let packet = query_packet(&self.id, action, &transaction.to_be_bytes());
-        self.socket
-            .send_to(&packet, address)
-            .map_err(|err| Error::Dht(format!("send to {address}: {err}")))?;
+        // Register the transaction *before* the send. On loopback the reply can
+        // arrive before this thread reaches the next line, and a reply whose
+        // transaction is not in `outstanding` yet is discarded as noise — which
+        // showed up as an announce or a get_peers token that silently went
+        // missing. Registering first closes that window; a failed send removes
+        // the entry again so the sweep does not wait on it.
         self.outstanding.lock().unwrap().push(Request {
             transaction,
             to: address,
             at: Instant::now(),
         });
+        if let Err(err) = self.socket.send_to(&packet, address) {
+            self.outstanding
+                .lock()
+                .unwrap()
+                .retain(|request| request.transaction != transaction);
+            return Err(Error::Dht(format!("send to {address}: {err}")));
+        }
         Ok(())
     }
 
@@ -559,9 +569,11 @@ impl Dht {
                     Ok(_) => {}
                     Err(_) => break,
                 }
-                if want_peers && !peers.is_empty() {
-                    break;
-                }
+                // Do not leave the round early just because one peer answered:
+                // every reply to this fan-out carries a token, and `announce`
+                // needs the tokens of *all* the nodes that held the torrent.
+                // Draining the round is what stopped `announce` from finding
+                // only one holder; the outer loop still stops after it.
                 if self.outstanding.lock().unwrap().is_empty() {
                     break;
                 }
@@ -1032,7 +1044,9 @@ mod tests {
     /// `drop_first_announce` makes the holder swallow the first announce
     /// datagram, which is what a dropped UDP packet looks like to the client.
     /// Returns (peers found, acked count, port the holder recorded).
-    fn hunt_and_announce(drop_first_announce: bool) -> (Vec<SocketAddr>, usize, Option<u16>) {
+    fn hunt_and_announce(
+        drop_first_announce: bool,
+    ) -> (Vec<SocketAddr>, usize, Option<u16>, usize) {
         let info_hash = [5u8; 20];
         let peer_node_id = [2u8; 20];
 
@@ -1067,27 +1081,33 @@ mod tests {
         assert_eq!(client.table_size(), 2, "router steered us to the peer node");
 
         let peers = client.peer_hunt(info_hash, 10, Duration::from_secs(3));
+        // Reported on failure: an ack count of 1 means either a token was never
+        // recorded (fewer than 2 holders) or one holder never answered.
+        let holders = client.tokens.lock().unwrap().len();
         let acked = client.announce(info_hash, peer_port);
 
         stop.store(true, Ordering::Relaxed);
         let _ = router_thread.join();
         let _ = peer_thread.join();
         let recorded = *announced.lock().unwrap();
-        (peers, acked, recorded)
+        (peers, acked, recorded, holders)
     }
 
     /// Router steers us to the peer node; the peer node hands the torrent's
     /// only peer over with a token, and the token lets us announce back.
     #[test]
     fn hunts_peers_through_the_router_chain_then_announces() {
-        let (peers, acked, recorded) = hunt_and_announce(false);
+        let (peers, acked, recorded, holders) = hunt_and_announce(false);
         assert_eq!(peers.len(), 1);
         let peer_port = peers[0].port();
         assert_eq!(peers, vec![SocketAddr::from(([127, 0, 0, 1], peer_port))]);
 
         // Both token-holding nodes acknowledge the announce; the holder
         // validates its token and records the port.
-        assert_eq!(acked, 2, "router and holder both acknowledged");
+        assert_eq!(
+            acked, 2,
+            "router and holder both acknowledged ({holders} token holders)"
+        );
         assert_eq!(
             recorded,
             Some(peer_port),
@@ -1099,7 +1119,7 @@ mod tests {
     /// the holder's ack outright, so the count silently dropped to 1.
     #[test]
     fn announce_retries_after_a_dropped_datagram() {
-        let (peers, acked, recorded) = hunt_and_announce(true);
+        let (peers, acked, recorded, _holders) = hunt_and_announce(true);
         assert_eq!(peers.len(), 1);
         let peer_port = peers[0].port();
         assert_eq!(acked, 2, "the retried announce still reached the holder");

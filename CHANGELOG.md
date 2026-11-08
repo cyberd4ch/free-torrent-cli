@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [3.2.0] - unreleased
+## [3.2.0] - 2026-11-08
 
 ### Added
 - **Download rate limit.** `--limit 500k` caps a CLI download, `ftc serve --limit 2M`
@@ -15,6 +15,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   A rate that cannot be parsed is a `400`, not a silently unlimited job.
 - `Throttle` in `ftc-core::session`: `bytes_per_second`, reserve-before-request
   pacing, and a test that proves 40 KB at 80 KB/s takes at least 300 ms.
+
+### Fixed
+- **The DHT hunt could find only one token holder**, which made
+  `hunts_peers_through_the_router_chain_then_announces` fail roughly one run in
+  four. `peer_hunt` stopped reading a round's replies as soon as one peer came
+  back, so `get_peers` responses still in flight never recorded their tokens and
+  `announce` reached fewer nodes than it knew about. The search now drains the
+  round — the outer loop still stops once peers are found — and the test reports
+  the token-holder count when it fails. 40/40 isolated runs, 25/25 for the retry
+  test.
+- **A reply could be discarded as unknown.** `ask` registered its transaction
+  after the datagram was sent; on loopback a fast reply could arrive in between
+  and be dropped as stale. Registration now happens before the send, and a
+  failed send removes the entry again.
 
 ## [3.1.0] - 2026-11-08
 
