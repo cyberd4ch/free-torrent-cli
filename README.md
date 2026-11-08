@@ -31,10 +31,12 @@ against `SHA256SUMS`, and puts `ftc` on your PATH — `/usr/local/bin` when that
 writable, `~/.local/bin` otherwise. No toolchain, no runtime, no sudo unless you
 ask for it.
 
-It also registers a launcher — `~/Applications/ftc.app` on macOS, a Start Menu
-entry on Windows, `ftc.desktop` on Linux — that runs `ftc gui`. One installed
-binary, both interfaces: the command line when you want it, a browser page when
-you don't.
+On macOS it also installs **a real app**: `~/Applications/ftc.app`, a WKWebView
+window (87 KB of Swift, `gui/macos/main.swift`) that starts the server itself and
+quits it when you close the window. Released as `ftc-macos-app.zip`. On Windows
+the installer adds a Start Menu entry and on Linux a `ftc.desktop` file, both
+running `ftc gui`. One installed binary, both interfaces: the command line when
+you want it, a window when you don't.
 
 ```powershell
 # Windows, in PowerShell
@@ -49,6 +51,7 @@ double-clicks into a text editor showing megabytes of binary.
 
 | Platform | Archive | Size |
 | :--- | :--- | ---: |
+| **macOS** app (Apple silicon) | [`ftc-macos-app.zip`](https://github.com/cyberd4ch/free-torrent-cli/releases/latest/download/ftc-macos-app.zip) | 2.2 MB |
 | **macOS** Apple silicon | [`ftc-macos-arm64.tar.gz`](https://github.com/cyberd4ch/free-torrent-cli/releases/latest/download/ftc-macos-arm64.tar.gz) | 1.3 MB |
 | **macOS** Intel | [`ftc-macos-x86_64.tar.gz`](https://github.com/cyberd4ch/free-torrent-cli/releases/latest/download/ftc-macos-x86_64.tar.gz) | 1.4 MB |
 | **Linux** x86_64 | [`ftc-linux-x86_64.tar.gz`](https://github.com/cyberd4ch/free-torrent-cli/releases/latest/download/ftc-linux-x86_64.tar.gz) | 1.4 MB |

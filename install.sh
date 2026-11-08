@@ -27,7 +27,11 @@ case "$OS-$ARCH" in
     ;;
 esac
 
-if [ "${FTC_VERSION:-latest}" = "latest" ]; then
+# FTC_BASE_URL overrides the download root (used to test this script against a
+# local directory without publishing a release).
+if [ -n "${FTC_BASE_URL:-}" ]; then
+  URL="$FTC_BASE_URL"
+elif [ "${FTC_VERSION:-latest}" = "latest" ]; then
   URL="https://github.com/$REPO/releases/latest/download"
 else
   URL="https://github.com/$REPO/releases/download/${FTC_VERSION}"
@@ -100,13 +104,25 @@ version=$("$prefix/ftc" --version 2>/dev/null | awk '{print $2}')
 if [ "$OS" = Darwin ]; then
   apps="${FTC_APPS_DIR:-$HOME/Applications}"
   app="$apps/ftc.app"
-  mkdir -p "$app/Contents/MacOS"
-  cat > "$app/Contents/MacOS/ftc" <<LAUNCHER
+  mkdir -p "$apps"
+  # The real app bundle: a WKWebView window compiled in CI, so double-clicking
+  # gives a window rather than a browser tab.
+  if fetch "$URL/ftc-macos-app.zip" "$tmp/ftc-app.zip" 2>/dev/null &&
+     unzip -q -o "$tmp/ftc-app.zip" -d "$apps" >/dev/null 2>&1 &&
+     [ -d "$app" ]; then
+    xattr -dr com.apple.quarantine "$app" 2>/dev/null || true
+    echo "-> installed $app (double-click for the app window)"
+  else
+    # Releases before the app bundle only carry the binary; give those users a
+    # launcher that opens the same UI in the browser.
+    echo "-> no app bundle in this release; writing a browser launcher"
+    mkdir -p "$app/Contents/MacOS"
+    cat > "$app/Contents/MacOS/ftc" <<LAUNCHER
 #!/bin/sh
 exec "$prefix/ftc" gui "\$@"
 LAUNCHER
-  chmod 755 "$app/Contents/MacOS/ftc"
-  cat > "$app/Contents/Info.plist" <<PLIST
+    chmod 755 "$app/Contents/MacOS/ftc"
+    cat > "$app/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -123,7 +139,8 @@ LAUNCHER
 </dict>
 </plist>
 PLIST
-  echo "-> installed $app (double-click for the web ui)"
+    echo "-> installed $app (double-click for the web ui)"
+  fi
 elif [ "$OS" = Linux ]; then
   desktop_dir="${FTC_APPS_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}}/applications"
   mkdir -p "$desktop_dir"

@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.2.1] - 2026-11-08
+
+### Added
+- **A real macOS app.** `gui/macos/main.swift` is a small AppKit + WKWebView window:
+  it starts `ftc serve` on a free loopback port, reads the URL the server prints,
+  shows that page, and terminates the child on quit. CI compiles it into `ftc.app`
+  and attaches `ftc-macos-app.zip` to the release; `install.sh` unpacks the bundle
+  into `~/Applications` (and still writes a browser launcher for older releases).
+  No Rust dependency was added — the window is 87 KB of Swift around the same binary.
+- `FTC_BASE_URL` on `install.sh` to test the installer against a local directory.
+
+### Verified
+- The installed bundle launches, spawns its own server, serves the page (`200`) and
+  leaves no child process behind after quitting.
+
 ## [3.2.0] - 2026-11-08
 
 ### Added
