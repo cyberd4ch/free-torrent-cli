@@ -5,6 +5,12 @@ name: smoke
 # the hash, run `--version`, start the UI, read `/api/state`, fetch the page.
 
 on:
+  # Releases published by a workflow with GITHUB_TOKEN do not cascade into other
+  # workflows (GitHub suppresses the chain on purpose), so this hangs off the
+  # release workflow finishing instead — the same moment, one hop away.
+  workflow_run:
+    workflows: [release]
+    types: [completed]
   release:
     types: [published]
   workflow_dispatch:
@@ -33,6 +39,7 @@ jobs:
             name: windows-x86_64
             asset: ftc-windows-x86_64.zip
     runs-on: ${{ matrix.os }}
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     steps:
       - uses: actions/checkout@v4
 
@@ -42,9 +49,10 @@ jobs:
         env:
           INPUT_TAG: ${{ inputs.tag }}
           EVENT_TAG: ${{ github.event.release.tag_name }}
+          RUN_TAG: ${{ github.event.workflow_run.head_branch }}
         run: |
           set -euo pipefail
-          tag="${INPUT_TAG:-$EVENT_TAG}"
+          tag="${INPUT_TAG:-${EVENT_TAG:-$RUN_TAG}}"
           if [ -z "$tag" ]; then
             tag="$(curl -fsSL https://api.github.com/repos/cyberd4ch/free-torrent-cli/releases/latest \
               | python3 -c 'import json,sys; print(json.load(sys.stdin)["tag_name"])')"
