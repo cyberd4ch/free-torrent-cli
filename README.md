@@ -115,8 +115,11 @@ ftc serve --port 9000 -o ~/Downloads
 ftc serve --limit 2M             # default cap for every job added from the page
 ```
 
-The same engine behind a local page: paste a magnet or a `.torrent` path, watch
-progress, speed, peers and ETA, cancel a run. The HTML and the HTTP server are
+The same engine behind a local download manager: categories with live counts, a
+sortable table (size, progress, speed, time left, peers, status, age), multi-select
+with Start/Pause/Stop/Retry/Remove, an add sheet that queues several links at once
+and can start them paused, preferences for the default folder and cap, search, a
+details pane, a right-click menu and keyboard shortcuts. The HTML, CSS and JS are
 compiled into the binary — no extra dependency, no second process — and it binds
 loopback only unless you ask for `--bind`.
 
@@ -124,11 +127,14 @@ Underneath it is a small JSON API, form-encoded on the way in:
 
 | Endpoint | |
 | :--- | :--- |
-| `GET /api/state` | every job with its live counters |
-| `POST /api/add` | `target=<magnet or path>&output=<dir>&limit=<rate>` |
-| `POST /api/pause` | `id=<job id>` |
-| `POST /api/resume` | `id=<job id>` |
-| `POST /api/cancel` | `id=<job id>` |
+| `GET /api/state` | every job with live counters, session totals and the current settings |
+| `GET`/`POST /api/settings` | default folder (`output=`) and cap (`limit=`, `none` clears it) |
+| `POST /api/add` | `target=<magnet or path>&output=<dir>&limit=<rate>&paused=1` |
+| `POST /api/pause` / `resume` | `id=<job>`, `ids=1,2,3` or `all=1` |
+| `POST /api/cancel` | `id=<job>`, `ids=1,2,3` or `all=1` |
+| `POST /api/remove` | drop finished jobs from the list: `id=`, `ids=` or `finished=1` |
+| `POST /api/retry` | queue a failed or stopped job again: `id=<job>` |
+| `POST /api/reveal` | show a job's file or folder in the file manager: `id=<job>` |
 
 Jobs report the engine's own `Arc<Progress>` atomics, so the page and the
 progress bar in your terminal can never disagree. Pause parks the workers without
@@ -138,10 +144,11 @@ touching verified progress; resume continues from the same queue.
 to `~/Downloads`, because a double-clicked launcher has no useful working
 directory.
 
-A `limit` (the box next to the output field) caps that one job; `--limit` at
-startup sets the default. The cap is a single shared token bucket in the engine,
-so `2M` means two mebibytes per second across all peers — not per connection —
-and a rate it cannot parse is rejected rather than silently ignored.
+The speed limit in the add sheet caps that one job, and Preferences (or `--limit`
+at startup) sets the default for the ones added afterwards. The cap is a single
+shared token bucket in the engine, so `2M` means two mebibytes per second across
+all peers — not per connection — and a rate it cannot parse is rejected rather
+than silently ignored.
 
 ## What you get for 3 MB
 

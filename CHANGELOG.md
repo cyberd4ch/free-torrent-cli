@@ -5,6 +5,41 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.3.0] - 2026-11-08
+
+### Added
+- **The page is a download manager now, not a form.** Categories with live counts
+  (all, downloading, paused, completed, failed), a sortable table with size,
+  progress, speed, time left, peers, status and age, multi-select with Start,
+  Pause, Stop, Retry and Remove, search, a details pane (path, pieces, peers,
+  average speed, elapsed, limit, timestamps, error), a right-click menu, a status
+  bar with aggregate speed, and shortcuts (`⌘N` add, `⌘F` search, `Space`
+  pause/resume, `Delete` stop, `⇧Delete` remove, `⌘A` select the view).
+- **Add sheet** that queues every pasted link at once, with a save folder, a per-job
+  cap and a "start paused" option; **Preferences** for the default folder and cap,
+  applied from then on and reported by the API.
+- **Batch and lifecycle endpoints.** `id=`, `ids=1,2,3` or `all=1` for pause,
+  resume and cancel; `remove` drops finished jobs (`finished=1` clears them all);
+  `retry` queues a failed or stopped job again; `reveal` opens the file or folder
+  in the system file manager; `GET`/`POST /api/settings` reads and writes defaults.
+- `/api/state` grew `version`, `settings`, `totals` and per-job `path`, `percent`,
+  `added`, `finished` and verified/total pieces, so the table needs no guessing.
+
+### Fixed
+- **The window no longer orphans its server when it is killed.** AppKit runs
+  `applicationWillTerminate` only for its own quit path, so a logout, a `kill` or a
+  Ctrl-C on the app left `ftc serve` running on a loopback port with a full job
+  queue and no window. The app now traps `SIGTERM`/`SIGINT`/`SIGHUP` through dispatch
+  sources, terminates the child, waits, and escalates to `SIGKILL` if it is still
+  alive — the same shutdown the Quit menu takes.
+
+### Verified
+- With the window running, `SIGTERM`, `SIGINT` and `SIGHUP` each stop the child
+  (no listener left, `pgrep -P` empty) while the page served `200` before the signal.
+- 17 CLI tests cover the new API against the real server (settings round-trip, batch
+  pause/resume, remove-only-finished, retry, reveal); the page script parses with
+  `node --check`. The bundle was rebuilt, relaunched and served the new page.
+
 ## [3.2.1] - 2026-11-08
 
 ### Added
@@ -18,7 +53,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Verified
 - The installed bundle launches, spawns its own server, serves the page (`200`) and
-  leaves no child process behind after quitting.
+  leaves no child behind after an AppKit quit. A signal quit did not — see 3.2.2.
 
 ## [3.2.0] - 2026-11-08
 

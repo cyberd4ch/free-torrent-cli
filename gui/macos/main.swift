@@ -11,15 +11,18 @@
 // with `ftc` copied alongside it.
 import AppKit
 import WebKit
+import Darwin
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var window: NSWindow!
     private var webView: WKWebView!
     private var server: Process?
     private var output = ""
+    private var signalSources: [DispatchSourceSignal] = []
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         buildMenu()
+        trapSignals()
 
         let frame = NSRect(x: 0, y: 0, width: 1100, height: 760)
         window = NSWindow(
@@ -47,7 +50,39 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         // The server is a child process; it must not outlive the window.
-        server?.terminate()
+        stopServer()
+    }
+
+    /// Terminate the child and wait, with a SIGKILL backstop, so a server that
+    /// ignores SIGTERM cannot keep a port open after the window is gone.
+    private func stopServer() {
+        guard let process = server, process.isRunning else { return }
+        let pid = process.processIdentifier
+        server = nil
+        process.terminate()
+        for _ in 0..<20 where process.isRunning {
+            usleep(50_000)
+        }
+        if process.isRunning {
+            kill(pid, SIGKILL)
+        }
+    }
+
+    /// A logout, a Ctrl-C from the shell that launched the app or a plain `kill`
+    /// never reaches `applicationWillTerminate` — AppKit only runs that for its
+    /// own quit path — so a signal would orphan a live `ftc serve` on a port
+    /// nobody knows about. Trap the three that matter and shut down the same way.
+    private func trapSignals() {
+        for sig in [SIGTERM, SIGINT, SIGHUP] {
+            signal(sig, SIG_IGN)
+            let source = DispatchSource.makeSignalSource(signal: sig, queue: .main)
+            source.setEventHandler { [weak self] in
+                self?.stopServer()
+                exit(0)
+            }
+            source.resume()
+            signalSources.append(source)
+        }
     }
 
     private func buildMenu() {

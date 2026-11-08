@@ -6,243 +6,745 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <link rel="icon" type="image/svg+xml"
         href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Crect%20width='32'%20height='32'%20rx='8'%20fill='%23111318'/%3E%3Cg%20fill='none'%20stroke='%23ff7a2f'%20stroke-width='3'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpath%20d='M16%207v13'/%3E%3Cpath%20d='M10%2015l6%206%206-6'/%3E%3Cpath%20d='M8%2026h16'/%3E%3C/g%3E%3C/svg%3E" />
-    <title>ftc — web ui</title>
+    <title>ftc — Download Manager</title>
     <style>
         :root {
-            --bg: #0a0b0d;
-            --panel: #111318;
-            --panel-2: #161a21;
-            --line: #1e222a;
-            --text: #e6e8ec;
+            --bg: #0b0c0f;
+            --panel: #0f1115;
+            --panel-2: #14171d;
+            --panel-3: #191d25;
+            --line: #21252e;
+            --line-2: #2c3240;
+            --text: #e8eaef;
             --muted: #8b93a1;
+            --dim: #5d6674;
             --accent: #ff7a2f;
+            --accent-2: #ffb057;
             --ok: #3ddc84;
+            --warn: #e6c36a;
             --err: #ff5d5d;
+            --info: #6aa8ff;
+            --cols: 34px minmax(200px, 1fr) 88px minmax(150px, 1.2fr) 86px 76px 54px 100px 104px;
         }
 
         * { box-sizing: border-box; }
 
+        html, body { height: 100%; }
+
         body {
             margin: 0;
-            min-height: 100vh;
-            background:
-                radial-gradient(900px 420px at 15% -10%, rgba(255, 122, 47, .10), transparent 70%),
-                var(--bg);
+            overflow: hidden;
             color: var(--text);
-            font: 15px/1.5 ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+            background: var(--bg);
+            font: 13px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, system-ui, sans-serif;
             -webkit-font-smoothing: antialiased;
         }
 
-        header {
+        button, input, textarea { font: inherit; color: inherit; }
+        ::selection { background: rgba(255, 122, 47, .28); }
+
+        .app { display: flex; flex-direction: column; height: 100vh; min-height: 480px; }
+
+        /* ---------- title bar ---------- */
+        .titlebar {
             display: flex;
             align-items: center;
             justify-content: space-between;
             gap: 16px;
-            max-width: 920px;
-            margin: 0 auto;
-            padding: 28px 20px 8px;
+            height: 48px;
+            padding: 0 16px;
+            background: linear-gradient(180deg, #101319, #0c0e12);
+            border-bottom: 1px solid var(--line);
         }
 
-        .brand { display: flex; align-items: baseline; gap: 10px; }
-        .logo { font-size: 22px; font-weight: 700; letter-spacing: -.02em; }
-        .logo b { color: var(--accent); }
-        .tag {
-            font-size: 10px;
-            letter-spacing: .12em;
-            text-transform: uppercase;
+        .brand { display: flex; align-items: center; gap: 10px; }
+        .mark {
+            display: grid;
+            place-items: center;
+            width: 26px;
+            height: 26px;
+            border-radius: 7px;
+            background: #161a21;
+            border: 1px solid var(--line-2);
+        }
+        .wordmark { font-weight: 600; letter-spacing: -.01em; }
+        .wordmark b { color: var(--accent); font-weight: 700; }
+        .wordmark small { color: var(--dim); font-weight: 500; margin-left: 6px; }
+
+        .title-right { display: flex; align-items: center; gap: 8px; }
+        .chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 3px 9px;
+            font-size: 11px;
             color: var(--muted);
+            background: var(--panel-2);
             border: 1px solid var(--line);
             border-radius: 999px;
-            padding: 2px 8px;
         }
-        .meta { color: var(--muted); font-size: 12px; }
+        .chip.ok { color: #9fe6bd; border-color: rgba(61, 220, 132, .28); }
+        .chip.bad { color: #ffb3b3; border-color: rgba(255, 93, 93, .3); }
+        .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--ok); }
+        .chip.bad .dot { background: var(--err); }
 
-        main { max-width: 920px; margin: 0 auto; padding: 12px 20px 64px; }
-
-        form {
-            display: grid;
-            grid-template-columns: 1fr 170px 130px auto;
-            gap: 10px;
-            margin: 18px 0 6px;
-        }
-
-        input {
-            width: 100%;
-            padding: 12px 14px;
-            color: var(--text);
+        /* ---------- toolbar ---------- */
+        .toolbar {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            height: 54px;
+            padding: 0 14px;
             background: var(--panel);
-            border: 1px solid var(--line);
-            border-radius: 10px;
-            font: inherit;
-            outline: none;
+            border-bottom: 1px solid var(--line);
+            overflow-x: auto;
         }
 
-        input:focus { border-color: #3a4150; box-shadow: 0 0 0 3px rgba(255, 122, 47, .10); }
-        input::placeholder { color: #5c6472; }
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            height: 32px;
+            padding: 0 12px;
+            white-space: nowrap;
+            color: #cdd3dd;
+            background: var(--panel-2);
+            border: 1px solid var(--line-2);
+            border-radius: 8px;
+            cursor: pointer;
+        }
+        .btn:hover:not(:disabled) { background: var(--panel-3); border-color: #3a4150; color: #fff; }
+        .btn:active:not(:disabled) { transform: translateY(1px); }
+        .btn:disabled { opacity: .38; cursor: default; }
+        .btn .glyph { font-size: 12px; opacity: .9; }
+        .btn.primary {
+            color: #191008;
+            font-weight: 650;
+            background: linear-gradient(180deg, var(--accent-2), var(--accent));
+            border-color: #c85f21;
+            padding: 0 14px;
+        }
+        .btn.primary:hover { filter: brightness(1.06); color: #191008; }
+        .btn.primary kbd {
+            margin-left: 4px;
+            padding: 1px 5px;
+            font-size: 10px;
+            font-family: inherit;
+            color: #4a2b14;
+            background: rgba(25, 16, 8, .16);
+            border-radius: 4px;
+        }
+        .btn.danger:hover:not(:disabled) { color: #ffc9c9; border-color: rgba(255, 93, 93, .45); }
 
-        button {
-            padding: 12px 18px;
-            font: inherit;
-            font-weight: 600;
-            color: #12100e;
-            background: var(--accent);
+        .divider { width: 1px; height: 22px; margin: 0 6px; background: var(--line-2); }
+        .spacer { flex: 1; }
+
+        .search {
+            display: flex;
+            align-items: center;
+            gap: 7px;
+            width: 250px;
+            height: 32px;
+            padding: 0 10px;
+            color: var(--dim);
+            background: #0b0d11;
+            border: 1px solid var(--line-2);
+            border-radius: 8px;
+        }
+        .search:focus-within { border-color: #3f4757; box-shadow: 0 0 0 3px rgba(255, 122, 47, .09); }
+        .search input {
+            flex: 1;
+            min-width: 0;
+            background: none;
             border: 0;
-            border-radius: 10px;
+            outline: none;
+            color: var(--text);
+        }
+        .search input::placeholder { color: #525a68; }
+
+        /* ---------- workspace ---------- */
+        .workspace { flex: 1; display: grid; grid-template-columns: 218px 1fr; min-height: 0; }
+
+        .sidebar {
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+            padding: 14px 10px;
+            background: var(--panel);
+            border-right: 1px solid var(--line);
+            overflow-y: auto;
+        }
+        .sidebar h2 {
+            margin: 4px 8px 8px;
+            font-size: 10px;
+            font-weight: 600;
+            letter-spacing: .13em;
+            text-transform: uppercase;
+            color: var(--dim);
+        }
+        .sidebar nav { display: grid; gap: 2px; margin-bottom: 20px; }
+
+        .filter {
+            display: flex;
+            align-items: center;
+            gap: 9px;
+            width: 100%;
+            padding: 7px 9px;
+            text-align: left;
+            color: #b9c0cb;
+            background: none;
+            border: 0;
+            border-left: 2px solid transparent;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+        .filter:hover { background: #14171d; color: #fff; }
+        .filter[aria-current="true"] {
+            color: #fff;
+            background: #171b22;
+            border-left-color: var(--accent);
+        }
+        .filter .icon { width: 14px; text-align: center; color: var(--muted); font-size: 12px; }
+        .filter[aria-current="true"] .icon { color: var(--accent); }
+        .filter .label { flex: 1; }
+        .filter .count {
+            min-width: 20px;
+            padding: 1px 6px;
+            text-align: center;
+            font-size: 11px;
+            color: var(--muted);
+            background: #10131a;
+            border: 1px solid var(--line);
+            border-radius: 999px;
+        }
+        .filter[aria-current="true"] .count { color: #ffd0b0; border-color: rgba(255, 122, 47, .3); }
+
+        .stats { display: grid; gap: 8px; margin: 0 8px 18px; }
+        .stats div { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+        .stats dt { font-size: 11px; color: var(--dim); }
+        .stats dd { margin: 0; font-size: 12px; color: #d5dae3; font-variant-numeric: tabular-nums; }
+
+        .sidebar-foot { margin-top: auto; padding: 10px 8px 0; color: #454d5a; font-size: 11px; line-height: 1.5; }
+
+        /* ---------- content ---------- */
+        .content { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--bg); }
+
+        .list-head {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            height: 40px;
+            padding: 0 14px 0 12px;
+            border-bottom: 1px solid var(--line);
+            background: #0d0f13;
+        }
+        .list-head #view-title { font-weight: 600; }
+        .view-sub { color: var(--dim); font-size: 11px; }
+        .view-hint { color: var(--dim); font-size: 11px; margin-right: 2px; }
+
+        .table-wrap { flex: 1; min-height: 0; overflow: auto; }
+
+        .table-head {
+            position: sticky;
+            top: 0;
+            z-index: 2;
+            display: grid;
+            grid-template-columns: var(--cols);
+            align-items: center;
+            gap: 10px;
+            height: 32px;
+            padding: 0 14px 0 12px;
+            font-size: 11px;
+            color: var(--muted);
+            background: #0e1116;
+            border-bottom: 1px solid var(--line);
+            user-select: none;
+        }
+        .table-head span[data-sort] { cursor: pointer; }
+        .table-head span[data-sort]:hover { color: #fff; }
+        .table-head span[data-dir="asc"]::after { content: " ↑"; color: var(--accent); }
+        .table-head span[data-dir="desc"]::after { content: " ↓"; color: var(--accent); }
+
+        .rows { display: flex; flex-direction: column; }
+
+        .row {
+            display: grid;
+            grid-template-columns: var(--cols);
+            align-items: center;
+            gap: 10px;
+            min-height: 46px;
+            padding: 6px 14px 6px 12px;
+            border-bottom: 1px solid #13161c;
+            cursor: default;
+        }
+        .row:hover { background: #101319; }
+        .row.active { background: #141a22; box-shadow: inset 2px 0 0 var(--accent); }
+
+        .cell { min-width: 0; }
+        .check-cell { display: flex; align-items: center; }
+        input[type="checkbox"] {
+            width: 14px;
+            height: 14px;
+            accent-color: var(--accent);
             cursor: pointer;
         }
 
-        button:hover { filter: brightness(1.08); }
-        button:active { transform: translateY(1px); }
-
-        .hint { min-height: 20px; color: var(--err); font-size: 12px; margin: 0 0 14px; }
-
-        .empty {
-            margin-top: 26px;
-            padding: 34px 22px;
-            color: var(--muted);
-            text-align: center;
-            border: 1px dashed var(--line);
-            border-radius: 12px;
-        }
-
-        .jobs { display: grid; gap: 12px; margin-top: 22px; }
-
-        .job {
-            position: relative;
-            padding: 16px 18px 14px;
-            background: linear-gradient(180deg, var(--panel-2), var(--panel));
-            border: 1px solid var(--line);
-            border-radius: 12px;
-        }
-
-        .job-head { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
-
-        .job-name {
-            flex: 1;
-            min-width: 0;
+        .name-cell { display: flex; flex-direction: column; gap: 1px; }
+        .name {
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
-            font-weight: 600;
+            font-weight: 550;
         }
-
-        .status {
-            flex: none;
-            font-size: 10px;
-            letter-spacing: .1em;
-            text-transform: uppercase;
-            padding: 3px 9px;
-            border-radius: 999px;
-            border: 1px solid var(--line);
-            color: var(--muted);
-        }
-
-        .s-downloading { color: var(--accent); border-color: rgba(255, 122, 47, .45); }
-        .s-done { color: var(--ok); border-color: rgba(61, 220, 132, .45); }
-        .s-error { color: var(--err); border-color: rgba(255, 93, 93, .45); }
-        .s-metadata { color: #7fb2ff; border-color: rgba(127, 178, 255, .45); }
-        .s-paused { color: #c9b27f; border-color: rgba(201, 178, 127, .45); }
-
-        .bar {
-            height: 8px;
+        .sub {
             overflow: hidden;
-            background: #0b0d11;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            font-size: 11px;
+            color: var(--dim);
+        }
+
+        .num { font-variant-numeric: tabular-nums; color: #c3cad5; }
+
+        .prog {
+            position: relative;
+            display: flex;
+            align-items: center;
+            height: 18px;
+            padding: 0;
+            overflow: hidden;
+            background: #0a0c10;
             border: 1px solid var(--line);
             border-radius: 999px;
         }
-
-        .bar i {
-            display: block;
-            height: 100%;
+        .prog i {
+            position: absolute;
+            inset: 0 auto 0 0;
             width: 0;
             background: linear-gradient(90deg, #ff7a2f, #ffb057);
-            transition: width .4s ease;
+            transition: width .45s ease;
+        }
+        .prog span {
+            position: relative;
+            width: 100%;
+            padding-right: 7px;
+            text-align: right;
+            font-size: 10px;
+            font-variant-numeric: tabular-nums;
+            color: #f2e6dc;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, .55);
+        }
+        .prog[data-state="paused"] i { background: linear-gradient(90deg, #7a6a3f, #b39a5d); }
+        .prog[data-state="done"] i { background: linear-gradient(90deg, #2f9c62, #53d68f); }
+        .prog[data-state="error"] i { background: linear-gradient(90deg, #8c3232, #c85555); }
+        .prog[data-state="cancelled"] i { background: linear-gradient(90deg, #3a3f49, #575e6b); }
+        .prog[data-state="metadata"] i {
+            width: 40% !important;
+            animation: slide 1.6s ease-in-out infinite;
+        }
+        @keyframes slide {
+            0% { left: -40%; }
+            100% { left: 100%; }
         }
 
-        .job-foot {
-            display: flex;
-            justify-content: space-between;
-            gap: 12px;
-            margin-top: 10px;
-            color: var(--muted);
-            font-size: 12px;
-        }
-
-        .job-path { margin-top: 6px; color: #5c6472; font-size: 11px; word-break: break-all; }
-
-        .job-err {
-            margin-top: 10px;
-            padding: 8px 10px;
-            color: var(--err);
-            background: rgba(255, 93, 93, .08);
-            border: 1px solid rgba(255, 93, 93, .25);
-            border-radius: 8px;
-            font-size: 12px;
-        }
-
-        .actions { display: flex; gap: 8px; margin-top: 12px; }
-
-        .job-action {
-            padding: 6px 12px;
-            color: var(--muted);
-            background: transparent;
+        .pill {
+            display: inline-block;
+            padding: 2px 8px;
+            font-size: 10px;
+            letter-spacing: .04em;
+            text-transform: uppercase;
             border: 1px solid var(--line);
-            border-radius: 8px;
+            border-radius: 999px;
+            color: var(--muted);
+        }
+        .st-downloading { color: var(--accent); border-color: rgba(255, 122, 47, .4); }
+        .st-metadata { color: var(--info); border-color: rgba(106, 168, 255, .4); }
+        .st-paused { color: var(--warn); border-color: rgba(230, 195, 106, .4); }
+        .st-done { color: var(--ok); border-color: rgba(61, 220, 132, .4); }
+        .st-error { color: var(--err); border-color: rgba(255, 93, 93, .4); }
+        .st-cancelled { color: var(--dim); }
+
+        .empty {
+            display: grid;
+            place-items: center;
+            gap: 6px;
+            padding: 64px 20px;
+            margin: 18px;
+            text-align: center;
+            color: var(--muted);
+            border: 1px dashed var(--line-2);
+            border-radius: 12px;
+        }
+        .empty strong { color: #d3d9e3; font-weight: 600; }
+        .empty small { color: var(--dim); }
+        .empty .btn { margin-top: 10px; }
+
+        /* ---------- details ---------- */
+        .details {
+            flex: none;
+            height: 158px;
+            padding: 12px 16px;
+            background: var(--panel);
+            border-top: 1px solid var(--line);
+            overflow: auto;
+        }
+        .details-empty { color: var(--dim); font-size: 12px; padding-top: 6px; }
+
+        .details-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+        .details-head .name { font-weight: 600; }
+        .details-head .spacer { flex: 1; }
+        .details-actions { display: flex; gap: 6px; }
+        .details-actions .btn { height: 27px; padding: 0 10px; font-size: 12px; }
+
+        .details-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+            gap: 7px 22px;
             font-size: 12px;
-            font-weight: 500;
         }
+        .pair { display: flex; gap: 8px; min-width: 0; }
+        .pair dt { flex: none; width: 78px; color: var(--dim); }
+        .pair dd { margin: 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #cdd4de; }
+        .pair dd.wrap { white-space: normal; word-break: break-all; }
+        .pair dd.err { color: #ffb0b0; white-space: normal; }
+        .pair dd.num { font-variant-numeric: tabular-nums; }
 
-        .job-action:hover { color: var(--text); border-color: #3a4150; }
-
-        footer {
-            max-width: 920px;
-            margin: 0 auto;
-            padding: 0 20px 40px;
-            color: #4d5563;
+        /* ---------- status bar ---------- */
+        .statusbar {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            height: 28px;
+            padding: 0 14px;
             font-size: 11px;
+            color: var(--dim);
+            background: #0a0c10;
+            border-top: 1px solid var(--line);
         }
+        .statusbar .spacer { flex: 1; }
+        .statusbar b { color: var(--muted); font-weight: 500; font-variant-numeric: tabular-nums; }
 
-        @media (max-width: 640px) {
-            form { grid-template-columns: 1fr; }
-            .job-foot { flex-direction: column; gap: 4px; }
+        /* ---------- dialogs ---------- */
+        dialog {
+            width: min(560px, calc(100vw - 40px));
+            padding: 0;
+            color: var(--text);
+            background: #111419;
+            border: 1px solid var(--line-2);
+            border-radius: 12px;
+            box-shadow: 0 30px 80px rgba(0, 0, 0, .6);
+        }
+        dialog::backdrop { background: rgba(4, 5, 7, .62); backdrop-filter: blur(2px); }
+        dialog form { padding: 18px 20px 16px; }
+        dialog h3 { margin: 0 0 4px; font-size: 15px; }
+        dialog .lede { margin: 0 0 16px; color: var(--dim); font-size: 12px; }
+        dialog label { display: block; margin-bottom: 12px; font-size: 12px; color: var(--muted); }
+        dialog label > input, dialog label > textarea {
+            display: block;
+            width: 100%;
+            margin-top: 6px;
+            padding: 9px 11px;
+            color: var(--text);
+            background: #0b0e12;
+            border: 1px solid var(--line-2);
+            border-radius: 8px;
+            outline: none;
+            resize: vertical;
+        }
+        dialog label > input:focus, dialog label > textarea:focus {
+            border-color: #414a5b;
+            box-shadow: 0 0 0 3px rgba(255, 122, 47, .09);
+        }
+        dialog textarea { min-height: 84px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+        dialog .two { display: grid; grid-template-columns: 1fr auto; gap: 14px; align-items: end; }
+        dialog .inline { display: inline-flex; align-items: center; gap: 7px; margin-bottom: 16px; color: var(--muted); }
+        dialog .inline input { margin: 0; }
+        dialog footer { display: flex; justify-content: flex-end; gap: 8px; margin-top: 6px; }
+        .form-error { min-height: 16px; margin: 0 0 8px; color: var(--err); font-size: 12px; }
+
+        /* ---------- context menu + toasts ---------- */
+        .menu {
+            position: fixed;
+            z-index: 40;
+            min-width: 190px;
+            padding: 5px;
+            background: #171b22;
+            border: 1px solid var(--line-2);
+            border-radius: 9px;
+            box-shadow: 0 16px 40px rgba(0, 0, 0, .55);
+        }
+        .menu button {
+            display: flex;
+            align-items: center;
+            gap: 9px;
+            width: 100%;
+            padding: 7px 9px;
+            text-align: left;
+            background: none;
+            border: 0;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+            color: #cbd2dc;
+        }
+        .menu button:hover:not(:disabled) { background: #20252e; color: #fff; }
+        .menu button:disabled { opacity: .35; cursor: default; }
+        .menu hr { margin: 5px 2px; border: 0; border-top: 1px solid var(--line); }
+
+        .toasts {
+            position: fixed;
+            right: 16px;
+            bottom: 40px;
+            z-index: 50;
+            display: grid;
+            gap: 8px;
+            width: min(360px, calc(100vw - 32px));
+        }
+        .toast {
+            padding: 9px 12px;
+            font-size: 12px;
+            color: #dfe4ec;
+            background: #1a1f27;
+            border: 1px solid var(--line-2);
+            border-left: 3px solid var(--ok);
+            border-radius: 8px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, .45);
+        }
+        .toast.bad { border-left-color: var(--err); }
+
+        @media (max-width: 980px) {
+            :root { --cols: 30px minmax(160px, 1fr) 78px minmax(120px, 1fr) 78px 66px 92px; }
+            .col-peers, .cell-peers, .col-added, .cell-added, .col-eta, .cell-eta { display: none; }
+            .workspace { grid-template-columns: 184px 1fr; }
+        }
+        @media (max-width: 720px) {
+            .workspace { grid-template-columns: 1fr; }
+            .sidebar { display: none; }
+            .search { width: 150px; }
         }
     </style>
 </head>
 
 <body>
-    <header>
-        <div class="brand">
-            <span class="logo"><b>ftc</b> web ui</span>
-            <span class="tag">local only</span>
+    <div class="app">
+        <header class="titlebar">
+            <div class="brand">
+                <span class="mark">
+                    <svg width="16" height="16" viewBox="0 0 32 32" aria-hidden="true">
+                        <g fill="none" stroke="#ff7a2f" stroke-width="3" stroke-linecap="round"
+                            stroke-linejoin="round">
+                            <path d="M16 6v15" />
+                            <path d="M9 14l7 7 7-7" />
+                            <path d="M7 27h18" />
+                        </g>
+                    </svg>
+                </span>
+                <span class="wordmark"><b>ftc</b> Download Manager <small>local</small></span>
+            </div>
+            <div class="title-right">
+                <span class="chip" id="version-chip">v—</span>
+                <span class="chip ok" id="conn-chip"><i class="dot"></i><span id="conn-text">connected</span></span>
+            </div>
+        </header>
+
+        <div class="toolbar">
+            <button class="btn primary" id="add-open" title="Add a download">
+                <span class="glyph">＋</span> Add download <kbd>⌘N</kbd>
+            </button>
+            <span class="divider"></span>
+            <button class="btn" data-act="resume" title="Start the selected downloads (Space)">
+                <span class="glyph">▶</span> Start
+            </button>
+            <button class="btn" data-act="pause" title="Pause the selected downloads (Space)">
+                <span class="glyph">❙❙</span> Pause
+            </button>
+            <button class="btn" data-act="cancel" title="Stop the selected downloads (Delete)">
+                <span class="glyph">■</span> Stop
+            </button>
+            <button class="btn" data-act="retry" title="Queue a failed or stopped download again">
+                <span class="glyph">↻</span> Retry
+            </button>
+            <button class="btn danger" data-act="remove" title="Remove finished downloads from the list (⇧Delete)">
+                <span class="glyph">✕</span> Remove
+            </button>
+            <span class="divider"></span>
+            <button class="btn" data-act="settings" title="Default folder and speed limit">
+                <span class="glyph">⚙</span> Preferences
+            </button>
+            <span class="spacer"></span>
+            <label class="search">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                    stroke-width="2.2" aria-hidden="true">
+                    <circle cx="11" cy="11" r="7" />
+                    <path d="M16.5 16.5L21 21" />
+                </svg>
+                <input id="search" placeholder="Search downloads" autocomplete="off" spellcheck="false"
+                    aria-label="Search downloads" />
+            </label>
         </div>
-        <div class="meta" id="meta">connecting…</div>
-    </header>
 
-    <main>
-        <form id="add">
-            <input id="target" placeholder="magnet:?xt=urn:btih:… or /path/to/file.torrent"
-                autocomplete="off" spellcheck="false" />
-            <input id="output" placeholder="output dir (default: cwd)" autocomplete="off" spellcheck="false" />
-            <input id="limit" placeholder="limit (2M)" autocomplete="off" spellcheck="false" />
-            <button type="submit">Add download</button>
+        <div class="workspace">
+            <aside class="sidebar">
+                <h2>Categories</h2>
+                <nav id="filters" aria-label="Categories"></nav>
+                <h2>This session</h2>
+                <dl class="stats">
+                    <div>
+                        <dt>Speed</dt>
+                        <dd id="sum-speed">0 B/s</dd>
+                    </div>
+                    <div>
+                        <dt>Downloaded</dt>
+                        <dd id="sum-downloaded">0 B</dd>
+                    </div>
+                    <div>
+                        <dt>Active</dt>
+                        <dd id="sum-active">0</dd>
+                    </div>
+                    <div>
+                        <dt>Jobs</dt>
+                        <dd id="sum-jobs">0</dd>
+                    </div>
+                </dl>
+                <div class="sidebar-foot">
+                    Serving this machine only.<br />
+                    No account, no telemetry.
+                </div>
+            </aside>
+
+            <main class="content">
+                <div class="list-head">
+                    <input type="checkbox" id="select-all" aria-label="Select all in this view" />
+                    <span id="view-title">All downloads</span>
+                    <span class="view-sub" id="view-sub"></span>
+                    <span class="spacer"></span>
+                    <span class="view-hint" id="view-hint">actions apply to this view</span>
+                </div>
+
+                <div class="table-wrap">
+                    <div class="table-head" id="columns">
+                        <span></span>
+                        <span data-sort="name">Name</span>
+                        <span data-sort="total" class="col-total">Size</span>
+                        <span data-sort="percent">Progress</span>
+                        <span data-sort="speed">Speed</span>
+                        <span data-sort="eta" class="col-eta">Time left</span>
+                        <span data-sort="peers" class="col-peers">Peers</span>
+                        <span data-sort="status" class="col-status">Status</span>
+                        <span data-sort="added" class="col-added">Added</span>
+                    </div>
+                    <div class="rows" id="rows"></div>
+                </div>
+
+                <section class="details" id="details" aria-label="Details">
+                    <div class="details-empty" id="details-empty">
+                        Select a download to see its path, peers, pieces and limits.
+                    </div>
+                    <div id="details-body" hidden></div>
+                </section>
+            </main>
+        </div>
+
+        <footer class="statusbar">
+            <span id="sb-message">ready</span>
+            <span class="spacer"></span>
+            <span><b id="sb-active">0</b> active</span>
+            <span>↓ <b id="sb-speed">0 B/s</b></span>
+            <span><b id="sb-total">0 B</b> downloaded</span>
+            <span id="sb-updated"></span>
+        </footer>
+    </div>
+
+    <dialog id="add-dialog">
+        <form id="add-form">
+            <h3>Add download</h3>
+            <p class="lede">Magnet links or paths to .torrent files — one per line to queue several.</p>
+            <label>Link or file
+                <textarea id="add-targets" rows="4" spellcheck="false"
+                    placeholder="magnet:?xt=urn:btih:…&#10;/Users/you/Downloads/ubuntu.torrent"></textarea>
+            </label>
+            <label>Save to
+                <input id="add-output" spellcheck="false" autocomplete="off" />
+            </label>
+            <div class="two">
+                <label>Speed limit
+                    <input id="add-limit" spellcheck="false" autocomplete="off" placeholder="unlimited — e.g. 2M" />
+                </label>
+                <label class="inline"><input type="checkbox" id="add-paused" /> Start paused</label>
+            </div>
+            <p class="form-error" id="add-error"></p>
+            <footer>
+                <button type="button" class="btn" data-close>Cancel</button>
+                <button type="submit" class="btn primary">Add download</button>
+            </footer>
         </form>
-        <p class="hint" id="hint"></p>
-        <div class="jobs" id="jobs"></div>
-    </main>
+    </dialog>
 
-    <footer>
-        Serving this machine only — no tracker, no account, no telemetry. Close the
-        terminal or press Ctrl-C in it to stop the server.
-    </footer>
+    <dialog id="settings-dialog">
+        <form id="settings-form">
+            <h3>Preferences</h3>
+            <p class="lede">Defaults for new downloads in this session.</p>
+            <label>Default folder
+                <input id="settings-output" spellcheck="false" autocomplete="off" />
+            </label>
+            <label>Default speed limit
+                <input id="settings-limit" spellcheck="false" autocomplete="off"
+                    placeholder="unlimited — e.g. 500k" />
+            </label>
+            <p class="form-error" id="settings-error"></p>
+            <footer>
+                <button type="button" class="btn" data-close>Cancel</button>
+                <button type="submit" class="btn primary">Save</button>
+            </footer>
+        </form>
+    </dialog>
+
+    <div class="toasts" id="toasts" aria-live="polite"></div>
 
     <script>
-        const jobsEl = document.getElementById("jobs");
-        const metaEl = document.getElementById("meta");
-        const hintEl = document.getElementById("hint");
-        const form = document.getElementById("add");
+        "use strict";
 
-        function humanBytes(value) {
-            if (!value) return "0 B";
+        const $ = (selector) => document.querySelector(selector);
+        const rowsEl = $("#rows");
+        const filtersEl = $("#filters");
+        const toastsEl = $("#toasts");
+
+        const FILTERS = [
+            { id: "all", label: "All downloads", icon: "▤" },
+            { id: "downloading", label: "Downloading", icon: "↓" },
+            { id: "paused", label: "Paused", icon: "❙❙" },
+            { id: "completed", label: "Completed", icon: "✓" },
+            { id: "failed", label: "Failed", icon: "!" },
+        ];
+
+        const STATUS = {
+            metadata: "fetching",
+            downloading: "downloading",
+            paused: "paused",
+            done: "completed",
+            error: "failed",
+            cancelled: "stopped",
+        };
+
+        const app = {
+            jobs: [],
+            settings: { output: "", limit: null },
+            totals: { speed: 0, downloaded: 0, active: 0, count: 0 },
+            version: "",
+            filter: "all",
+            search: "",
+            sort: { key: "added", dir: "desc" },
+            selected: new Set(),
+            detail: null,
+            view: [],
+            reachable: true,
+            message: "ready",
+            updated: 0,
+        };
+
+        /* ---------- formatting ---------- */
+        function bytes(value) {
+            if (!value || value < 1) return "0 B";
             const units = ["B", "KB", "MB", "GB", "TB"];
             let index = 0;
             let size = value;
@@ -250,161 +752,703 @@
                 size /= 1024;
                 index += 1;
             }
-            return `${size.toFixed(size < 10 && index > 0 ? 1 : 0)} ${units[index]}`;
+            const digits = index === 0 || size >= 100 ? 0 : 1;
+            return `${size.toFixed(digits)} ${units[index]}`;
         }
 
-        function timeLeft(job) {
-            if (!job.speed || job.downloaded >= job.total) return "";
-            const seconds = (job.total - job.downloaded) / job.speed;
-            if (seconds > 3600) return ">1h left";
-            if (seconds < 1) return "<1s left";
-            return `${Math.round(seconds)}s left`;
+        function speed(value) {
+            return value > 0.5 ? `${bytes(value)}/s` : "—";
         }
 
-        function flash(message) {
-            hintEl.textContent = message;
-            setTimeout(() => {
-                if (hintEl.textContent === message) hintEl.textContent = "";
-            }, 5000);
+        function percent(job) {
+            if (job.status === "done") return 100;
+            return Math.max(0, Math.min(100, Math.round(job.percent || 0)));
         }
 
-        function card(job) {
-            const el = document.createElement("article");
-            el.className = "job";
-
-            const head = document.createElement("div");
-            head.className = "job-head";
-            const name = document.createElement("span");
-            name.className = "job-name";
-            name.textContent = job.name || job.target;
-            name.title = job.target;
-            const status = document.createElement("span");
-            status.className = `status s-${job.status}`;
-            status.textContent = job.status;
-            head.append(name, status);
-            el.append(head);
-
-            const percent = job.total
-                ? Math.min(100, Math.round((job.downloaded / job.total) * 100))
-                : job.status === "done" ? 100 : 0;
-            const bar = document.createElement("div");
-            bar.className = "bar";
-            const fill = document.createElement("i");
-            fill.style.width = `${percent}%`;
-            bar.append(fill);
-            el.append(bar);
-
-            const foot = document.createElement("div");
-            foot.className = "job-foot";
-            const left = document.createElement("span");
-            left.textContent = `${percent}% · ${humanBytes(job.downloaded)} / ${job.total ? humanBytes(job.total) : "—"}`;
-            const right = document.createElement("span");
-            right.textContent = [
-                job.speed ? `${humanBytes(job.speed)}/s` : null,
-                job.limit ? `cap ${humanBytes(job.limit)}/s` : null,
-                job.peers ? `${job.peers} peer${job.peers === 1 ? "" : "s"}` : null,
-                timeLeft(job),
-            ].filter(Boolean).join(" · ") || "—";
-            foot.append(left, right);
-            el.append(foot);
-
-            if (job.error) {
-                const error = document.createElement("div");
-                error.className = "job-err";
-                error.textContent = job.error;
-                el.append(error);
-            }
-
-            const path = document.createElement("div");
-            path.className = "job-path";
-            path.textContent = job.output;
-            el.append(path);
-
-            if (job.status === "downloading" || job.status === "paused") {
-                const actions = document.createElement("div");
-                actions.className = "actions";
-                actions.append(
-                    job.status === "paused"
-                        ? actionButton("Resume", "/api/resume", job.id)
-                        : actionButton("Pause", "/api/pause", job.id),
-                    actionButton("Cancel", "/api/cancel", job.id),
-                );
-                el.append(actions);
-            }
-            return el;
+        function eta(job) {
+            if (job.status === "done") return "—";
+            if (job.status === "paused" || job.status === "cancelled") return "—";
+            if (!job.speed || !job.total || job.downloaded >= job.total) return job.status === "metadata" ? "—" : "";
+            const seconds = Math.round((job.total - job.downloaded) / job.speed);
+            if (seconds > 86400) return ">1d";
+            if (seconds >= 3600) return `${Math.floor(seconds / 3600)}h ${String(Math.round((seconds % 3600) / 60)).padStart(2, "0")}m`;
+            if (seconds >= 60) return `${Math.floor(seconds / 60)}m ${String(seconds % 60).padStart(2, "0")}s`;
+            return `${Math.max(seconds, 1)}s`;
         }
 
-        function actionButton(label, path, id) {
-            const button = document.createElement("button");
-            button.className = "job-action";
-            button.textContent = label;
-            button.addEventListener("click", async () => {
-                if ((await send(path, { id })) !== null) poll();
+        function ago(when) {
+            if (!when) return "—";
+            const seconds = Math.max(1, Math.round(Date.now() / 1000 - when));
+            if (seconds < 60) return `${seconds}s ago`;
+            if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
+            if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
+            return `${Math.floor(seconds / 86400)}d ago`;
+        }
+
+        function elapsed(seconds) {
+            if (!seconds) return "—";
+            const total = Math.round(seconds);
+            if (total >= 3600) return `${Math.floor(total / 3600)}h ${String(Math.floor((total % 3600) / 60)).padStart(2, "0")}m`;
+            if (total >= 60) return `${Math.floor(total / 60)}m ${String(total % 60).padStart(2, "0")}s`;
+            return `${total}s`;
+        }
+
+        function bucket(job) {
+            if (job.status === "done") return "completed";
+            if (job.status === "error" || job.status === "cancelled") return "failed";
+            if (job.status === "metadata" || job.status === "downloading") return "downloading";
+            return "paused";
+        }
+
+        function title(job) {
+            return job.name || job.target;
+        }
+
+        /* ---------- API ---------- */
+        async function api(path, params = {}) {
+            const response = await fetch(path, {
+                method: "POST",
+                headers: { "content-type": "application/x-www-form-urlencoded" },
+                body: new URLSearchParams(params),
             });
-            return button;
+            if (!response.ok) {
+                const text = (await response.text()).trim();
+                throw new Error(text || `request failed (${response.status})`);
+            }
+            return response.json().catch(() => null);
         }
 
-        function render(jobs) {
-            jobsEl.replaceChildren();
-            if (!jobs.length) {
-                const empty = document.createElement("div");
-                empty.className = "empty";
-                empty.textContent = "Nothing downloading yet. Paste a magnet link or a .torrent path above.";
-                jobsEl.append(empty);
+        function toast(message, bad = false) {
+            const item = document.createElement("div");
+            item.className = bad ? "toast bad" : "toast";
+            item.textContent = message;
+            toastsEl.append(item);
+            setTimeout(() => item.remove(), bad ? 6000 : 3200);
+        }
+
+        function say(message) {
+            app.message = message;
+            $("#sb-message").textContent = message;
+        }
+
+        /* ---------- selection ---------- */
+        function selectedJobs() {
+            return app.jobs.filter((job) => app.selected.has(job.id));
+        }
+
+        const APPLIES = {
+            pause: (job) => job.status === "downloading",
+            resume: (job) => job.status === "paused",
+            cancel: (job) => ["metadata", "paused", "downloading"].includes(job.status),
+            retry: (job) => ["error", "cancelled"].includes(job.status),
+            remove: (job) => ["done", "error", "cancelled"].includes(job.status),
+        };
+
+        function actionable(action) {
+            const pool = app.selected.size ? selectedJobs() : app.view;
+            const test = APPLIES[action];
+            return test ? pool.filter(test) : pool;
+        }
+
+        function toggle(id, on) {
+            if (on === undefined) {
+                app.selected.has(id) ? app.selected.delete(id) : app.selected.add(id);
+            } else if (on) {
+                app.selected.add(id);
+            } else {
+                app.selected.delete(id);
+            }
+            render();
+        }
+
+        function select(id) {
+            app.detail = id;
+            render();
+        }
+
+        /* ---------- rendering ---------- */
+        function currentView() {
+            const needle = app.search.trim().toLowerCase();
+            const filtered = app.jobs.filter((job) => {
+                if (app.filter !== "all" && bucket(job) !== app.filter) return false;
+                if (!needle) return true;
+                return `${job.name} ${job.target} ${job.path}`.toLowerCase().includes(needle);
+            });
+            const key = app.sort.key;
+            const direction = app.sort.dir === "asc" ? 1 : -1;
+            const value = {
+                name: (job) => title(job).toLowerCase(),
+                total: (job) => job.total,
+                percent: (job) => percent(job),
+                speed: (job) => job.speed,
+                eta: (job) => {
+                    if (!job.speed || !job.total) return Number.MAX_SAFE_INTEGER;
+                    return (job.total - job.downloaded) / job.speed;
+                },
+                peers: (job) => job.peers,
+                status: (job) => job.status,
+                added: (job) => job.added,
+            }[key] || ((job) => job.added);
+            return [...filtered].sort((left, right) => {
+                const a = value(left);
+                const b = value(right);
+                if (a === b) return left.id - right.id;
+                return a > b ? direction : -direction;
+            });
+        }
+
+        function renderFilters() {
+            const counts = { all: app.jobs.length, downloading: 0, paused: 0, completed: 0, failed: 0 };
+            for (const job of app.jobs) counts[bucket(job)] += 1;
+
+            filtersEl.replaceChildren();
+            for (const filter of FILTERS) {
+                const button = document.createElement("button");
+                button.className = "filter";
+                button.type = "button";
+                button.setAttribute("aria-current", String(app.filter === filter.id));
+                const icon = document.createElement("span");
+                icon.className = "icon";
+                icon.textContent = filter.icon;
+                const label = document.createElement("span");
+                label.className = "label";
+                label.textContent = filter.label;
+                const count = document.createElement("span");
+                count.className = "count";
+                count.textContent = String(counts[filter.id] || 0);
+                button.append(icon, label, count);
+                button.addEventListener("click", () => {
+                    app.filter = filter.id;
+                    render();
+                });
+                filtersEl.append(button);
+            }
+        }
+
+        function cell(className, content) {
+            const node = document.createElement("div");
+            node.className = `cell ${className}`;
+            if (content) node.append(content);
+            return node;
+        }
+
+        function progressCell(job) {
+            const wrap = document.createElement("div");
+            wrap.className = "prog";
+            wrap.dataset.state = job.status;
+            const fill = document.createElement("i");
+            fill.style.width = `${percent(job)}%`;
+            const label = document.createElement("span");
+            label.textContent = job.status === "metadata" && !job.total ? "metadata" : `${percent(job)}%`;
+            wrap.append(fill, label);
+            return cell("cell-progress", wrap);
+        }
+
+        function row(job) {
+            const node = document.createElement("div");
+            node.className = `row${app.detail === job.id ? " active" : ""}`;
+            node.dataset.id = String(job.id);
+
+            const check = document.createElement("input");
+            check.type = "checkbox";
+            check.checked = app.selected.has(job.id);
+            check.setAttribute("aria-label", `Select ${title(job)}`);
+            check.addEventListener("click", (event) => {
+                event.stopPropagation();
+                toggle(job.id, check.checked);
+            });
+            const checkCell = document.createElement("div");
+            checkCell.className = "cell check-cell";
+            checkCell.append(check);
+
+            const titleNode = document.createElement("span");
+            titleNode.className = "name";
+            titleNode.textContent = title(job);
+            titleNode.title = job.target;
+            const subNode = document.createElement("span");
+            subNode.className = "sub";
+            subNode.textContent = job.name ? job.target : (job.error || job.path);
+            const nameCell = document.createElement("div");
+            nameCell.className = "cell name-cell";
+            nameCell.append(titleNode, subNode);
+
+            const size = document.createElement("div");
+            size.className = "cell num cell-total";
+            size.textContent = job.total ? bytes(job.total) : "—";
+
+            const speedCell = document.createElement("div");
+            speedCell.className = "cell num cell-speed";
+            speedCell.textContent = speed(job.speed);
+
+            const etaCell = document.createElement("div");
+            etaCell.className = "cell num cell-eta";
+            etaCell.textContent = eta(job) || "—";
+
+            const peersCell = document.createElement("div");
+            peersCell.className = "cell num cell-peers";
+            peersCell.textContent = String(job.peers || 0);
+
+            const status = document.createElement("div");
+            status.className = "cell cell-status";
+            const pill = document.createElement("span");
+            pill.className = `pill st-${job.status}`;
+            pill.textContent = STATUS[job.status] || job.status;
+            status.append(pill);
+
+            const added = document.createElement("div");
+            added.className = "cell num cell-added";
+            added.textContent = ago(job.added);
+            added.title = new Date(job.added * 1000).toLocaleString();
+
+            node.append(checkCell, nameCell, size, progressCell(job), speedCell, etaCell, peersCell, status, added);
+            node.addEventListener("click", () => select(job.id));
+            node.addEventListener("contextmenu", (event) => {
+                event.preventDefault();
+                select(job.id);
+                openMenu(event.clientX, event.clientY, job);
+            });
+            return node;
+        }
+
+        function emptyState() {
+            const wrap = document.createElement("div");
+            wrap.className = "empty";
+            const strong = document.createElement("strong");
+            const small = document.createElement("small");
+            if (!app.jobs.length) {
+                strong.textContent = "No downloads yet";
+                small.textContent = "Add a magnet link or a .torrent file to get started.";
+                const button = document.createElement("button");
+                button.className = "btn primary";
+                button.type = "button";
+                button.textContent = "＋ Add download";
+                button.addEventListener("click", openAdd);
+                wrap.append(strong, small, button);
+            } else {
+                strong.textContent = "Nothing in this view";
+                small.textContent = "Try another category or clear the search.";
+                wrap.append(strong, small);
+            }
+            return wrap;
+        }
+
+        function renderRows() {
+            rowsEl.replaceChildren();
+            if (!app.view.length) {
+                rowsEl.append(emptyState());
                 return;
             }
-            for (const job of jobs) jobsEl.append(card(job));
+            for (const job of app.view) rowsEl.append(row(job));
         }
 
-        async function send(path, params) {
-            try {
-                const response = await fetch(path, {
-                    method: "POST",
-                    headers: { "content-type": "application/x-www-form-urlencoded" },
-                    body: new URLSearchParams(params),
-                });
-                if (!response.ok) {
-                    flash(await response.text());
-                    return null;
-                }
-                return await response.json().catch(() => null);
-            } catch (error) {
-                flash(`request failed: ${error}`);
-                return null;
+        function pair(label, value, className = "") {
+            const wrapper = document.createElement("dl");
+            wrapper.className = "pair";
+            const term = document.createElement("dt");
+            term.textContent = label;
+            const detail = document.createElement("dd");
+            detail.className = className;
+            detail.textContent = value;
+            detail.title = value;
+            wrapper.append(term, detail);
+            return wrapper;
+        }
+
+        function renderDetails() {
+            const job = app.jobs.find((entry) => entry.id === app.detail);
+            const empty = $("#details-empty");
+            const body = $("#details-body");
+
+            if (!job) {
+                empty.hidden = false;
+                body.hidden = true;
+                body.replaceChildren();
+                return;
             }
+            empty.hidden = true;
+            body.hidden = false;
+            body.replaceChildren();
+
+            const head = document.createElement("div");
+            head.className = "details-head";
+            const name = document.createElement("span");
+            name.className = "name";
+            name.textContent = title(job);
+            const pill = document.createElement("span");
+            pill.className = `pill st-${job.status}`;
+            pill.textContent = STATUS[job.status] || job.status;
+            const spacer = document.createElement("span");
+            spacer.className = "spacer";
+
+            const actions = document.createElement("div");
+            actions.className = "details-actions";
+            const reveal = document.createElement("button");
+            reveal.className = "btn";
+            reveal.type = "button";
+            reveal.textContent = "Open folder";
+            reveal.addEventListener("click", () => revealJob(job));
+            const copy = document.createElement("button");
+            copy.className = "btn";
+            copy.type = "button";
+            copy.textContent = "Copy path";
+            copy.addEventListener("click", () => copyPath(job));
+            actions.append(reveal, copy);
+            head.append(name, pill, spacer, actions);
+
+            const grid = document.createElement("div");
+            grid.className = "details-grid";
+            grid.append(
+                pair("Path", job.path, "wrap"),
+                pair("Size", job.total ? bytes(job.total) : "—", "num"),
+                pair("Downloaded", `${bytes(job.downloaded)} (${percent(job)}%)`, "num"),
+                pair("Speed", speed(job.speed), "num"),
+                pair("Average", job.elapsed > 0 ? speed(job.downloaded / job.elapsed) : "—", "num"),
+                pair("Peers", String(job.peers || 0), "num"),
+                pair("Pieces", job.pieces ? `${job.verified} / ${job.pieces}` : "—", "num"),
+                pair("Elapsed", elapsed(job.elapsed), "num"),
+                pair("Limit", job.limit ? `${bytes(job.limit)}/s` : "unlimited", "num"),
+                pair("Added", new Date(job.added * 1000).toLocaleString()),
+                pair("Finished", job.finished ? new Date(job.finished * 1000).toLocaleString() : "—"),
+                pair("Source", job.name ? job.target : "local .torrent", "wrap"),
+            );
+            if (job.error) grid.append(pair("Error", job.error, "err"));
+
+            body.append(head, grid);
+        }
+
+        function renderSummary() {
+            $("#sum-speed").textContent = speed(app.totals.speed);
+            $("#sum-downloaded").textContent = bytes(app.totals.downloaded);
+            $("#sum-active").textContent = String(app.totals.active);
+            $("#sum-jobs").textContent = String(app.jobs.length);
+
+            $("#sb-active").textContent = String(app.totals.active);
+            $("#sb-speed").textContent = speed(app.totals.speed);
+            $("#sb-total").textContent = bytes(app.totals.downloaded);
+            $("#sb-updated").textContent = app.updated
+                ? `synced ${ago(app.updated)}`
+                : "";
+        }
+
+        function renderHead() {
+            const filter = FILTERS.find((entry) => entry.id === app.filter);
+            $("#view-title").textContent = filter ? filter.label : "Downloads";
+            $("#view-sub").textContent = `${app.view.length}${app.search ? " matching" : " shown"}`;
+            $("#view-hint").textContent = app.selected.size
+                ? `${app.selected.size} selected`
+                : "actions apply to this view";
+
+            const all = $("#select-all");
+            all.checked = app.view.length > 0 && app.view.every((job) => app.selected.has(job.id));
+            all.indeterminate = !all.checked && app.view.some((job) => app.selected.has(job.id));
+
+            for (const span of document.querySelectorAll("[data-sort]")) {
+                span.dataset.dir = span.dataset.sort === app.sort.key ? app.sort.dir : "";
+            }
+
+            for (const button of document.querySelectorAll("[data-act]")) {
+                const action = button.dataset.act;
+                if (action === "settings") continue;
+                button.disabled = actionable(action).length === 0;
+            }
+        }
+
+        function render() {
+            app.view = currentView();
+            renderFilters();
+            renderRows();
+            renderDetails();
+            renderSummary();
+            renderHead();
+            $("#version-chip").textContent = app.version ? `v${app.version}` : "v—";
+            const chip = $("#conn-chip");
+            chip.className = app.reachable ? "chip ok" : "chip bad";
+            $("#conn-text").textContent = app.reachable ? "connected" : "offline";
+        }
+
+        /* ---------- actions ---------- */
+        async function runAction(action) {
+            const targets = actionable(action);
+            if (!targets.length) {
+                toast(`Nothing to ${action === "remove" ? "remove" : action} in this view.`, true);
+                return;
+            }
+            const ids = targets.map((job) => job.id);
+            try {
+                if (action === "retry") {
+                    for (const id of ids) await api("/api/retry", { id });
+                    say(`Re-queued ${ids.length} download${ids.length === 1 ? "" : "s"}`);
+                    toast(`Re-queued ${ids.length} download${ids.length === 1 ? "" : "s"}`);
+                } else {
+                    const result = await api(`/api/${action}`, { ids: ids.join(",") });
+                    const count = result && (result.affected ?? result.removed);
+                    const label = { pause: "Paused", resume: "Started", cancel: "Stopped", remove: "Removed" }[action];
+                    say(`${label} ${count ?? ids.length} download${(count ?? ids.length) === 1 ? "" : "s"}`);
+                    toast(`${label} ${count ?? ids.length} download${(count ?? ids.length) === 1 ? "" : "s"}`);
+                }
+                if (action === "remove") app.selected.clear();
+                poll();
+            } catch (error) {
+                toast(error.message, true);
+                say(error.message);
+            }
+        }
+
+        async function revealJob(job) {
+            try {
+                const result = await api("/api/reveal", { id: job.id });
+                say(`Opened ${result && result.path ? result.path : "the folder"}`);
+            } catch (error) {
+                toast(error.message, true);
+            }
+        }
+
+        async function copyPath(job) {
+            try {
+                await navigator.clipboard.writeText(job.path);
+                toast("Path copied");
+            } catch {
+                toast(job.path);
+            }
+        }
+
+        /* ---------- context menu ---------- */
+        let menu = null;
+
+        function closeMenu() {
+            if (menu) {
+                menu.remove();
+                menu = null;
+            }
+        }
+
+        function openMenu(x, y, job) {
+            closeMenu();
+            menu = document.createElement("div");
+            menu.className = "menu";
+
+            const item = (label, run, enabled = true) => {
+                const button = document.createElement("button");
+                button.type = "button";
+                button.textContent = label;
+                button.disabled = !enabled;
+                button.addEventListener("click", () => {
+                    closeMenu();
+                    run();
+                });
+                return button;
+            };
+
+            menu.append(
+                item("Start", () => runAction("resume"), APPLIES.resume(job)),
+                item("Pause", () => runAction("pause"), APPLIES.pause(job)),
+                item("Stop", () => runAction("cancel"), APPLIES.cancel(job)),
+                item("Retry", () => runAction("retry"), APPLIES.retry(job)),
+                item("Remove from list", () => runAction("remove"), APPLIES.remove(job)),
+            );
+            const rule = document.createElement("hr");
+            menu.append(
+                rule,
+                item("Open folder", () => revealJob(job)),
+                item("Copy path", () => copyPath(job)),
+                item("Add download…", openAdd),
+            );
+
+            menu.style.left = `${Math.min(x, window.innerWidth - 210)}px`;
+            menu.style.top = `${Math.min(y, window.innerHeight - 260)}px`;
+            document.body.append(menu);
+        }
+
+        document.addEventListener("click", (event) => {
+            if (menu && !menu.contains(event.target)) closeMenu();
+        });
+        window.addEventListener("blur", closeMenu);
+        window.addEventListener("resize", closeMenu);
+
+        /* ---------- dialogs ---------- */
+        const addDialog = $("#add-dialog");
+        const settingsDialog = $("#settings-dialog");
+
+        function openAdd() {
+            $("#add-error").textContent = "";
+            $("#add-output").value = app.settings.output || "";
+            $("#add-limit").value = app.settings.limit ? `${Math.round(app.settings.limit / 1024)}k` : "";
+            addDialog.showModal();
+            setTimeout(() => $("#add-targets").focus(), 30);
+        }
+
+        function openSettings() {
+            $("#settings-error").textContent = "";
+            $("#settings-output").value = app.settings.output || "";
+            $("#settings-limit").value = app.settings.limit ? `${Math.round(app.settings.limit / 1024)}k` : "";
+            settingsDialog.showModal();
+        }
+
+        $("#add-open").addEventListener("click", openAdd);
+        for (const closer of document.querySelectorAll("[data-close]")) {
+            closer.addEventListener("click", () => closer.closest("dialog").close());
+        }
+
+        $("#add-form").addEventListener("submit", async (event) => {
+            event.preventDefault();
+            const error = $("#add-error");
+            error.textContent = "";
+            const targets = $("#add-targets").value
+                .split("\n")
+                .map((line) => line.trim())
+                .filter(Boolean);
+            if (!targets.length) {
+                error.textContent = "Paste a magnet link or a .torrent path first.";
+                return;
+            }
+            const output = $("#add-output").value.trim();
+            const limit = $("#add-limit").value.trim();
+            const paused = $("#add-paused").checked ? "1" : "";
+
+            let queued = 0;
+            const failures = [];
+            for (const target of targets) {
+                try {
+                    await api("/api/add", { target, output, limit, paused });
+                    queued += 1;
+                } catch (failure) {
+                    failures.push(`${target.length > 46 ? `${target.slice(0, 46)}…` : target}: ${failure.message}`);
+                }
+            }
+            if (failures.length) {
+                error.textContent = failures.slice(0, 3).join("\n");
+                if (!queued) return;
+            }
+            addDialog.close();
+            $("#add-targets").value = "";
+            $("#add-paused").checked = false;
+            toast(`Queued ${queued} download${queued === 1 ? "" : "s"}`);
+            say(`Queued ${queued} download${queued === 1 ? "" : "s"}`);
+            poll();
+        });
+
+        $("#settings-form").addEventListener("submit", async (event) => {
+            event.preventDefault();
+            const error = $("#settings-error");
+            error.textContent = "";
+            try {
+                const result = await api("/api/settings", {
+                    output: $("#settings-output").value.trim(),
+                    // A cleared field is an explicit "unlimited", not "leave it".
+                    limit: $("#settings-limit").value.trim() || "none",
+                });
+                app.settings = { output: result.output, limit: result.limit };
+                settingsDialog.close();
+                toast("Preferences saved");
+                poll();
+            } catch (failure) {
+                error.textContent = failure.message;
+            }
+        });
+
+        /* ---------- toolbar + selection ---------- */
+        for (const button of document.querySelectorAll("[data-act]")) {
+            button.addEventListener("click", () => {
+                const action = button.dataset.act;
+                if (action === "settings") openSettings();
+                else runAction(action);
+            });
+        }
+
+        $("#select-all").addEventListener("change", (event) => {
+            for (const job of app.view) {
+                if (event.target.checked) app.selected.add(job.id);
+                else app.selected.delete(job.id);
+            }
+            render();
+        });
+
+        $("#search").addEventListener("input", (event) => {
+            app.search = event.target.value;
+            render();
+        });
+
+        for (const span of document.querySelectorAll("[data-sort]")) {
+            span.addEventListener("click", () => {
+                const key = span.dataset.sort;
+                if (app.sort.key === key) {
+                    app.sort.dir = app.sort.dir === "asc" ? "desc" : "asc";
+                } else {
+                    app.sort = { key, dir: key === "name" || key === "status" ? "asc" : "desc" };
+                }
+                render();
+            });
+        }
+
+        document.addEventListener("keydown", (event) => {
+            const typing = ["INPUT", "TEXTAREA", "SELECT"].includes(document.activeElement.tagName);
+            const modifier = event.metaKey || event.ctrlKey;
+
+            if (addDialog.open || settingsDialog.open) {
+                if (event.key === "Escape") closeMenu();
+                return;
+            }
+            if (modifier && event.key.toLowerCase() === "n") {
+                event.preventDefault();
+                openAdd();
+            } else if (modifier && event.key.toLowerCase() === "f") {
+                event.preventDefault();
+                $("#search").focus();
+                $("#search").select();
+            } else if (event.key === "Escape") {
+                closeMenu();
+                if (typing) document.activeElement.blur();
+            } else if (typing) {
+                return;
+            } else if (event.key === " ") {
+                event.preventDefault();
+                runAction(actionable("pause").length ? "pause" : "resume");
+            } else if (event.key === "Delete" && event.shiftKey) {
+                event.preventDefault();
+                runAction("remove");
+            } else if (event.key === "Delete" || (event.key === "Backspace" && event.metaKey)) {
+                event.preventDefault();
+                runAction("cancel");
+            } else if (modifier && event.key.toLowerCase() === "a") {
+                event.preventDefault();
+                for (const job of app.view) app.selected.add(job.id);
+                render();
+            }
+        });
+
+        /* ---------- polling ---------- */
+        function apply(state) {
+            app.jobs = Array.isArray(state.jobs) ? state.jobs : [];
+            app.settings = state.settings || app.settings;
+            app.totals = state.totals || app.totals;
+            app.version = state.version || app.version;
+            app.updated = Math.floor(Date.now() / 1000);
+            const ids = new Set(app.jobs.map((job) => job.id));
+            for (const id of [...app.selected]) if (!ids.has(id)) app.selected.delete(id);
+            if (app.detail && !ids.has(app.detail)) app.detail = null;
+            document.title = app.jobs.length
+                ? `ftc — ${app.jobs.filter((job) => job.status === "downloading").length} downloading`
+                : "ftc — Download Manager";
         }
 
         async function poll() {
             try {
                 const response = await fetch("/api/state", { cache: "no-store" });
-                const state = await response.json();
-                render(state.jobs);
-                const active = state.jobs.filter((job) => job.status === "downloading").length;
-                metaEl.textContent = `${active} active · ${state.jobs.length} total`;
-            } catch (error) {
-                metaEl.textContent = "server unreachable";
+                if (!response.ok) throw new Error(`state ${response.status}`);
+                apply(await response.json());
+                app.reachable = true;
+            } catch {
+                app.reachable = false;
+                say("server unreachable — is ftc still running?");
             }
+            render();
         }
 
-        form.addEventListener("submit", async (event) => {
-            event.preventDefault();
-            const target = document.getElementById("target").value.trim();
-            if (!target) {
-                flash("Paste a magnet link or a .torrent path first.");
-                return;
-            }
-            const output = document.getElementById("output").value.trim();
-            const limit = document.getElementById("limit").value.trim();
-            const added = await send("/api/add", { target, output, limit });
-            if (added) {
-                document.getElementById("target").value = "";
-                flash("");
-                poll();
-            }
-        });
-
+        render();
         poll();
-        setInterval(poll, 1000);
+        setInterval(() => {
+            if (!document.hidden) poll();
+        }, 1000);
     </script>
 </body>
 
