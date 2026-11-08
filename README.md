@@ -44,10 +44,28 @@ through the DHT (BEP 5), then announces itself to the closest nodes when done.
 And it seeds on demand: pass `--seed 60` and once the download finishes, the
 engine opens a listener and serves exactly the pieces it can re-verify on disk.
 
+## Install
+
+Prebuilt binaries are attached to every [release](https://github.com/cyberd4ch/free-torrent-cli/releases/latest):
+`ftc-linux-x86_64`, `ftc-macos-arm64`, `ftc-macos-x86_64`, `ftc-windows-x86_64.exe`
+and a `SHA256SUMS` you can verify against.
+
+```bash
+# macOS (Apple silicon) — swap the asset name for your platform
+curl -L -o ftc https://github.com/cyberd4ch/free-torrent-cli/releases/latest/download/ftc-macos-arm64
+chmod +x ftc && ./ftc --version
+```
+
+Or build it yourself (Rust 1.75+):
+
+```bash
+git clone https://github.com/cyberd4ch/free-torrent-cli
+cd free-torrent-cli && cargo build --release
+```
+
 ## Quick start
 
 ```bash
-cargo build --release
 ./target/release/ftc ./some.torrent -o ./downloads
 ```
 

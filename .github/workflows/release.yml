@@ -40,8 +40,34 @@ jobs:
           mkdir -p dist
           bin=target/${{ matrix.target }}/release/ftc
           if [ "${{ runner.os }}" = "Windows" ]; then bin="$bin.exe"; fi
-          cp "$bin" "dist/ftc-${{ matrix.name }}"
+          out="dist/ftc-${{ matrix.name }}"
+          if [ "${{ runner.os }}" = "Windows" ]; then out="$out.exe"; fi
+          cp "$bin" "$out"
       - uses: actions/upload-artifact@v4
         with:
           name: ftc-${{ matrix.name }}
           path: dist/*
+
+  release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Checksums
+        working-directory: dist
+        run: |
+          chmod +x ftc-* || true
+          sha256sum ftc-* > SHA256SUMS
+          cat SHA256SUMS
+      - name: Publish the GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/ftc-*
+            dist/SHA256SUMS
+          generate_release_notes: true
+          fail_on_unmatched_files: true

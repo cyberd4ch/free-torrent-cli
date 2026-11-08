@@ -5,7 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [3.0.0] - 2026-11-07
+## [3.0.0] - 2026-11-08
+
+First release of the Rust client. Prebuilt `ftc` binaries for Linux x86_64,
+macOS (arm64 + x86_64) and Windows x86_64, plus `SHA256SUMS`, are attached to
+the GitHub release.
 
 ### Changed
 - **Rewritten in Rust.** The engine lives in `crates/core`, the binary in
@@ -19,17 +23,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Peer frames are capped at 2 MiB before allocation.
 
 ### Added
-- 25 tests, including an end-to-end download from a fake local peer.
-- `--peers` to bypass the tracker and `--max-peers` to tune concurrency.
-
-### Removed
-- The Node.js engine, Electron app, web UI and their tests. Magnet *downloads*
-  (BEP 9/10), DHT (BEP 5), seeding and the front ends are staged; see the README
-  parity table.
-
-## [Unreleased]
-
-### Added
 - **Metadata exchange (BEP 9/10).** Magnet links now download: the client fetches the
   `info` dictionary from a peer, verifies it against the magnet's info hash, and builds
   the torrent from those exact bytes. Verified end to end against a fake peer.
@@ -39,20 +32,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   routing table, XOR-ordered `get_peers` hunts with token capture from every node
   that hands one, and `announce_peer` to the token-holding closest nodes after a
   download. Trackerless magnets resolve through it; `--no-dht` opts out.
-- 34 tests, including a UDP router → holder chain exercising a full DHT hunt and a
-  token-validated announce.
 - **Seeding (`--seed <secs>`).** After the download completes, the engine opens a
   listener and serves exactly the pieces `verify_existing` passes: MSB-first
   Bitfield, unchoke on interest, 128 KiB request cap, one thread per peer, and
   a report of bytes and peers served. A partially-downloaded directory seeds
   only what verifies — the seeder lies about nothing.
-- 2 more tests: a fake leecher round-trip (block served, impossible request
-  drops the connection) and a wrong-info-hash rejection; 37 in total.
+- `--peers` to bypass the tracker and `--max-peers` to tune concurrency.
+- 37 tests, including an end-to-end download from a fake local peer, a UDP
+  router → holder DHT chain, a seeder/leecher round-trip, and a wrong-info-hash
+  rejection.
 
 ### Fixed
 - `announce_peer` retries a datagram that goes unacknowledged inside its
   budget instead of counting a dropped UDP packet as a silent node; a
   deterministic test drops the first announce to pin the behaviour.
+
+### Removed
+- The Node.js engine, Electron app, web UI and their tests. The front ends are
+  staged; see the README parity table.
 
 ### Added
 - **Magnet link support** — `node index.js "magnet:?xt=urn:btih:…"` now works with no
