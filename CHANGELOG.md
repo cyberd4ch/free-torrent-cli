@@ -26,12 +26,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   log buffer that had already been cleared when the URL arrived, so it always
   concluded the server had failed. It now records that the page loaded and only
   reports a real failure.
-- **Magnets with dead trackers never resolved.** The DHT was only consulted when
-  a magnet had no trackers at all; now it is asked whenever the announce list
-  yields no peers, and it retries on a free port if 6881 is taken. Announces now
-  stop after 8 s each (20 s for the whole list) and every peer exchange may use
-  at most 15 s of the 120 s metadata budget, so a dead swarm fails with a clear
-  error instead of leaving the add dialog spinning forever.
+- **Magnets with dead trackers never resolved.** Announces to a magnet's own
+  trackers now go out in parallel (8 s each, 20 s overall); when the whole list
+  is 403s, dead UDP hosts or an I2P name that will not resolve, well-known
+  public trackers are tried before the DHT, and the DHT gets a second hunt if
+  its first answer is thin. It also retries on a free port if 6881 is taken.
+- **Metadata exchange gave up after a few peers.** Peers are contacted in
+  parallel batches of eight with an 8 s cap and in shuffled order, so a
+  200-peer swarm is sampled within seconds instead of losing the 120 s budget
+  to the first few silent hosts. Failures now report how many peers were tried
+  and the last error instead of one misleading tracker message.
 - **Healthy peers were rejected during metadata exchange.** A peer that sent a
   bitfield or an unchoke before its extension handshake was treated as not
   supporting `ut_metadata`, so magnets failed against ordinary clients even
