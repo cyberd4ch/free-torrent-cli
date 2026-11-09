@@ -27,8 +27,25 @@ OPTIONS:
     -V, --version         show the version
 
 SUBCOMMANDS:
+    swarm <magnet|file>   report tracker, DHT and reachable peer counts
     serve                 run the web ui on http://127.0.0.1:8080
     gui                   start the web ui and open it in your browser
+";
+
+const SWARM_USAGE: &str = "\
+ftc swarm — is this swarm alive?
+
+USAGE:
+    ftc swarm <magnet:?xt=urn:btih:... | file.torrent> [options]
+
+OPTIONS:
+        --port <n>        port to advertise to trackers and the DHT (default: 6881)
+        --no-dht          trackers only
+    -h, --help            show this help
+
+Prints how many trackers answered, how many unique peers were discovered, and
+how many of them accept a TCP connection. A high peer count with zero reachable
+means the swarm is dead, not that the client is broken.
 ";
 
 const SERVE_USAGE: &str = "\
@@ -62,6 +79,7 @@ fn main() -> ExitCode {
 fn run() -> Result<(), String> {
     let argv: Vec<String> = std::env::args().skip(1).collect();
     match argv.first().map(String::as_str) {
+        Some("swarm") => return run_swarm(&argv[1..]),
         Some("serve") => return run_server(&argv[1..], false),
         Some("gui") => return run_server(&argv[1..], true),
         _ => {}
@@ -230,6 +248,66 @@ fn run() -> Result<(), String> {
         }
         Err(err) => Err(err.to_string()),
     }
+}
+
+fn run_swarm(args: &[String]) -> Result<(), String> {
+    let mut target: Option<String> = None;
+    let mut use_dht = true;
+    let mut port: u16 = 6881;
+    let mut iter = args.iter();
+    while let Some(arg) = iter.next() {
+        match arg.as_str() {
+            "-h" | "--help" => {
+                print!("{SWARM_USAGE}");
+                return Ok(());
+            }
+            "--no-dht" => use_dht = false,
+            "--port" => {
+                port = iter
+                    .next()
+                    .ok_or("--port needs a number")?
+                    .parse()
+                    .map_err(|err| format!("bad --port: {err}"))?;
+            }
+            other if other.starts_with('-') => {
+                return Err(format!("unknown option {other}\n\n{SWARM_USAGE}"))
+            }
+            other => {
+                if target.is_some() {
+                    return Err("only one magnet or torrent may be given".into());
+                }
+                target = Some(other.to_string());
+            }
+        }
+    }
+
+    let target = target.ok_or_else(|| format!("no magnet or torrent given\n\n{SWARM_USAGE}"))?;
+    let (info_hash, trackers) = if target.starts_with("magnet:") {
+        let link = magnet::parse(&target).map_err(|err| err.to_string())?;
+        (link.info_hash, link.trackers)
+    } else {
+        let bytes = std::fs::read(&target).map_err(|err| format!("cannot read {target}: {err}"))?;
+        let torrent = Torrent::parse(&bytes).map_err(|err| err.to_string())?;
+        (torrent.info_hash, torrent.trackers.clone())
+    };
+
+    let hash = hex::encode(info_hash);
+    println!("Footorrent swarm report — {hash}");
+    println!("  announce list     {} tracker(s)", trackers.len());
+    println!("  asking trackers and the DHT (this can take a minute)…");
+    let peer_id = ftc_core::session::make_peer_id();
+    let report = ftc_core::metadata::swarm(&trackers, &info_hash, &peer_id, port, use_dht);
+    println!("  trackers answered {}", report.trackers_ok);
+    if report.fallback_trackers {
+        println!("  own list dead     yes — public trackers were used");
+    }
+    for error in report.tracker_errors.iter().take(6) {
+        println!("    ! {error}");
+    }
+    println!("  DHT peers         {}", report.dht_peers);
+    println!("  unique peers      {}", report.peers.len());
+    println!("  reachable (2 s)   {}", report.reachable);
+    Ok(())
 }
 
 fn run_server(args: &[String], gui: bool) -> Result<(), String> {

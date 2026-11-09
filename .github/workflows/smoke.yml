@@ -91,6 +91,16 @@ jobs:
           esac
           ls -l
 
+      - name: The footorrent alias works
+        if: runner.os != 'Windows'
+        shell: bash
+        run: ./pkg/footorrent --version
+
+      - name: The footorrent alias works (Windows)
+        if: runner.os == 'Windows'
+        shell: cmd
+        run: pkg\footorrent.cmd --version
+
       - name: Run the binary and serve the page
         shell: bash
         run: |

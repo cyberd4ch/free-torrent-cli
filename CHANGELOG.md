@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`ftc swarm`.** Reports how many trackers answered, how many unique peers the
+  trackers and DHT know, and how many of those accept a TCP connection. A high
+  peer count with zero reachable means the swarm is dead, not the client.
 - **`footorrent` alias.** The installers now put a `footorrent` symlink (a
   `.cmd` shim on Windows) beside `ftc`, and the release archives carry it too,
   so the product name works without breaking the existing command or assets.
@@ -60,7 +63,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   command itself stays `ftc`, which is what the installers put on PATH.
 - **Failures hid the infohash.** The add dialog shortens the magnet in its error
   message, so a dead-swarm report could not be looked up. Resolve failures now
-  include the full 40-character infohash before the peer errors.
+  include the full 40-character infohash before the peer errors, and the dialog
+  offers a Copy infohash button when one is present.
 - **Healthy peers were rejected during metadata exchange.** A peer that sent a
   bitfield or an unchoke before its extension handshake was treated as not
   supporting `ut_metadata`, so magnets failed against ordinary clients even

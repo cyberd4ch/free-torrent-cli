@@ -730,6 +730,7 @@
             </div>
             <p class="form-error" id="add-error"></p>
             <button type="button" class="btn" id="add-retry" hidden>Retry failed</button>
+            <button type="button" class="btn" id="add-copy-hash" hidden>Copy infohash</button>
             <footer>
                 <button type="button" class="btn" data-close>Cancel</button>
                 <button type="submit" class="btn primary">Add download</button>
@@ -1640,6 +1641,8 @@
         function openAdd() {
             $("#add-error").textContent = "";
             $("#add-retry").hidden = true;
+            $("#add-copy-hash").hidden = true;
+            app.errorHash = "";
             $("#add-output").value = app.settings.output || "";
             $("#add-limit").value = app.settings.limit ? `${Math.round(app.settings.limit / 1024)}k` : "";
             addDialog.showModal();
@@ -1697,6 +1700,9 @@
                 }
                 if (failures.length) {
                     error.textContent = failures.slice(0, 3).join("\n");
+                    const hash = failures.join("\n").match(/for ([0-9a-f]{40}):/i);
+                    app.errorHash = hash ? hash[1].toLowerCase() : "";
+                    $("#add-copy-hash").hidden = !app.errorHash;
                     if (!batch.length) {
                         // Keep the links that failed so one click can try again
                         // without digging the magnet back out of the clipboard.
@@ -1719,6 +1725,16 @@
         $("#add-retry").addEventListener("click", () => {
             $("#add-retry").hidden = true;
             $("#add-form").requestSubmit();
+        });
+
+        $("#add-copy-hash").addEventListener("click", async () => {
+            if (!app.errorHash) return;
+            try {
+                await navigator.clipboard.writeText(app.errorHash);
+                toast("Infohash copied");
+            } catch {
+                toast(app.errorHash);
+            }
         });
 
         $("#settings-form").addEventListener("submit", async (event) => {

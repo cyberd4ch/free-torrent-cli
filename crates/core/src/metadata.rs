@@ -218,6 +218,96 @@ pub fn fetch(
     fetch_all(trackers, info_hash, peer_id, port, use_dht).map(|resolved| resolved.info)
 }
 
+/// What a swarm looks like right now: who the announce list knows, who the DHT
+/// knows, and how many of those peers accept a TCP connection at all.
+pub struct SwarmReport {
+    pub peers: Vec<SocketAddr>,
+    pub reachable: usize,
+    pub trackers_ok: usize,
+    pub tracker_errors: Vec<String>,
+    pub dht_peers: usize,
+    pub fallback_trackers: bool,
+}
+
+/// Diagnose a swarm without downloading metadata: announce, ask the DHT, then
+/// probe every discovered peer with a short TCP connect. A torrent that reports
+/// 34 peers and 0 reachable is dead, not misconfigured on this end.
+pub fn swarm(
+    trackers: &[String],
+    info_hash: &[u8; 20],
+    peer_id: &[u8; 20],
+    port: u16,
+    use_dht: bool,
+) -> SwarmReport {
+    let request = AnnounceRequest::new(*info_hash, *peer_id, 0, 0);
+    let (mut peers, mut trackers_ok, mut tracker_errors) =
+        announce_all(trackers, &request, TRACKER_BUDGET);
+    let mut fallback_trackers = false;
+    if peers.is_empty() && use_dht {
+        let extra: Vec<String> = FALLBACK_TRACKERS
+            .iter()
+            .filter(|url| !trackers.iter().any(|tracker| tracker == **url))
+            .map(|url| (*url).to_string())
+            .collect();
+        if !extra.is_empty() {
+            fallback_trackers = true;
+            let (found, ok, errors) = announce_all(&extra, &request, Duration::from_secs(10));
+            peers.extend(found);
+            trackers_ok += ok;
+            tracker_errors.extend(errors);
+        }
+    }
+
+    let mut dht_peers = 0;
+    if use_dht {
+        if let Ok(found) = from_dht(*info_hash, port) {
+            dht_peers = found.len();
+            peers.extend(found);
+        }
+    }
+    let mut seen = std::collections::HashSet::new();
+    peers.retain(|peer| seen.insert(*peer));
+    let reachable = probe_reachable(&peers, Duration::from_secs(2));
+    SwarmReport {
+        peers,
+        reachable,
+        trackers_ok,
+        tracker_errors,
+        dht_peers,
+        fallback_trackers,
+    }
+}
+
+/// TCP-connect every peer in parallel batches; only a completed handshake-level
+/// connect counts, which is enough to separate a stale peer list from a live one.
+fn probe_reachable(peers: &[SocketAddr], timeout: Duration) -> usize {
+    const BATCH: usize = 32;
+    let mut reachable = 0;
+    for chunk in peers.chunks(BATCH) {
+        let (sender, receiver) = std::sync::mpsc::channel();
+        for peer in chunk {
+            let peer = *peer;
+            let sender = sender.clone();
+            std::thread::spawn(move || {
+                let ok = std::net::TcpStream::connect_timeout(&peer, timeout).is_ok();
+                let _ = sender.send(ok);
+            });
+        }
+        drop(sender);
+        let deadline = Instant::now() + timeout + Duration::from_secs(1);
+        for _ in 0..chunk.len() {
+            let left = deadline.saturating_duration_since(Instant::now());
+            if left.is_zero() {
+                break;
+            }
+            if let Ok(true) = receiver.recv_timeout(left) {
+                reachable += 1;
+            }
+        }
+    }
+    reachable
+}
+
 /// A tracker that accepts the connection but never answers would otherwise
 /// block the whole resolve, leaving the add dialog spinning forever. UDP and
 /// HTTP announces both run on a helper thread so the caller keeps a deadline.
@@ -247,7 +337,7 @@ fn announce_all(
     trackers: &[String],
     request: &AnnounceRequest,
     budget: Duration,
-) -> (Vec<SocketAddr>, Vec<String>) {
+) -> (Vec<SocketAddr>, usize, Vec<String>) {
     let (sender, receiver) = std::sync::mpsc::channel();
     for url in trackers {
         let url = url.clone();
@@ -262,6 +352,7 @@ fn announce_all(
 
     let deadline = Instant::now() + budget;
     let mut peers = Vec::new();
+    let mut answered = 0usize;
     let mut errors = Vec::new();
     for _ in 0..trackers.len() {
         let left = deadline.saturating_duration_since(Instant::now());
@@ -275,13 +366,14 @@ fn announce_all(
         }
         match receiver.recv_timeout(left) {
             Ok((_, Ok(response))) => {
+                answered += 1;
                 peers.extend(response.peers.into_iter().filter(|peer| peer.is_ipv4()))
             }
             Ok((url, Err(err))) => errors.push(format!("{url}: {err}")),
             Err(_) => break,
         }
     }
-    (peers, errors)
+    (peers, answered, errors)
 }
 
 /// Like [`fetch`], but also reports the peers that were discovered, so the UI
@@ -306,7 +398,7 @@ pub fn fetch_all(
     // Ask every tracker at once. Asking them in turn let one 403 or one silent
     // UDP tracker eat the shared budget, so later trackers never got a turn and
     // the whole magnet looked dead.
-    let (found, announce_errors) = announce_all(trackers, &request, TRACKER_BUDGET);
+    let (found, _answered, announce_errors) = announce_all(trackers, &request, TRACKER_BUDGET);
     peers.extend(found);
     errors.extend(announce_errors);
 
@@ -326,7 +418,8 @@ pub fn fetch_all(
                 trackers.len(),
                 extra.len()
             );
-            let (found, extra_errors) = announce_all(&extra, &request, Duration::from_secs(10));
+            let (found, _answered, extra_errors) =
+                announce_all(&extra, &request, Duration::from_secs(10));
             peers.extend(found);
             errors.extend(extra_errors);
         }
