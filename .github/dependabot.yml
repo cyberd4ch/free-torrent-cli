@@ -18,6 +18,13 @@ updates:
           - "*"
         update-types:
           - patch
+    # `update-types` on a group only controls what gets grouped — it does not
+    # stop Dependabot opening the rest individually. This does.
+    ignore:
+      - dependency-name: "*"
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
 
   - package-ecosystem: github-actions
     directory: /
