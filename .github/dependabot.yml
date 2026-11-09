@@ -1,0 +1,29 @@
+version: 2
+
+updates:
+  # Six direct crates plus the lockfile transitive set; one grouped PR keeps
+  # the noise down while still surfacing advisories every week.
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Etc/UTC
+    open-pull-requests-limit: 5
+    groups:
+      rust-dependencies:
+        patterns:
+          - "*"
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:15"
+      timezone: Etc/UTC
+    groups:
+      actions:
+        patterns:
+          - "*"
