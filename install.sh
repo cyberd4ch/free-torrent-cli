@@ -86,6 +86,9 @@ elif [ ! -d "$prefix" ] || [ ! -w "$prefix" ]; then
 fi
 mv "$tmp/ftc" "$prefix/ftc"
 chmod 755 "$prefix/ftc"
+# Brand alias: the same binary under the product name, so existing scripts that
+# call `ftc` keep working and new ones can use `footorrent`.
+ln -sfn ftc "$prefix/footorrent"
 
 # Unsigned binaries are quarantined by Gatekeeper; the bits are already correct,
 # this only stops the "cannot be opened" dialog.
@@ -93,7 +96,7 @@ if [ "$OS" = "Darwin" ]; then
   xattr -d com.apple.quarantine "$prefix/ftc" 2>/dev/null || true
 fi
 
-echo "-> installed $prefix/ftc"
+echo "-> installed $prefix/ftc (alias: $prefix/footorrent)"
 "$prefix/ftc" --version || true
 
 # One binary, both interfaces: `ftc` in a terminal, and a launcher that runs

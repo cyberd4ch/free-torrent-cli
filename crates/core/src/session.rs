@@ -625,6 +625,65 @@ mod tests {
     use crate::torrent::tests::single_file_torrent;
     use std::net::TcpListener;
 
+    /// A seeder that reports every block request and holds its first reply until
+    /// the test opens the gate, so a test can flip pause/stop at a block edge.
+    fn fake_peer_gated(
+        listener: TcpListener,
+        data: Vec<u8>,
+        piece_length: usize,
+        pieces: usize,
+        info_hash: [u8; 20],
+        requests: std::sync::mpsc::Sender<()>,
+        first_gate: std::sync::mpsc::Receiver<()>,
+    ) {
+        let mut first = true;
+        for _ in 0..pieces {
+            let Ok((mut stream, _)) = listener.accept() else {
+                return;
+            };
+            let _ = stream.set_read_timeout(Some(Duration::from_secs(10)));
+            if peer::read_handshake(&mut stream, &info_hash).is_err() {
+                continue;
+            }
+            let _ = peer::write_handshake(&mut stream, &info_hash, &[7u8; 20]);
+            let mut bits = vec![0u8; pieces.div_ceil(8)];
+            for index in 0..pieces {
+                bits[index / 8] |= 0x80 >> (index % 8);
+            }
+            let _ = peer::write_message(
+                &mut stream,
+                &Message::Extended(0, b"d1:md11:ut_metadatai1:ee".to_vec()),
+            );
+            let _ = peer::write_message(&mut stream, &Message::Bitfield(bits));
+            while !matches!(peer::read_message(&mut stream), Ok(Message::Interested)) {}
+            let _ = peer::write_message(&mut stream, &Message::Unchoke);
+            while let Ok(message) = peer::read_message(&mut stream) {
+                if let Message::Request {
+                    index,
+                    begin,
+                    length,
+                } = message
+                {
+                    let _ = requests.send(());
+                    if first {
+                        first = false;
+                        let _ = first_gate.recv();
+                    }
+                    let start = index as usize * piece_length + begin as usize;
+                    let end = (start + length as usize).min(data.len());
+                    let _ = peer::write_message(
+                        &mut stream,
+                        &Message::Piece {
+                            index,
+                            begin,
+                            data: data[start..end].to_vec(),
+                        },
+                    );
+                }
+            }
+        }
+    }
+
     /// A minimal seeder: handshake, full bitfield, unchoke, then answer every request.
     fn fake_peer(
         listener: TcpListener,
@@ -761,6 +820,129 @@ mod tests {
             stats.elapsed >= Duration::from_millis(400),
             "the run finished in {:?}, so the pause never blocked it",
             stats.elapsed
+        );
+
+        let _ = server.join();
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn pause_lands_between_blocks_not_at_the_end_of_a_piece() {
+        let piece_length = 65_536usize;
+        let data: Vec<u8> = (0..piece_length as u32)
+            .map(|index| (index % 251) as u8)
+            .collect();
+        let raw = single_file_torrent("blocks.bin", &data, piece_length);
+        let torrent = Torrent::parse(&raw).unwrap();
+        assert_eq!(torrent.piece_count(), 1);
+        let info_hash = torrent.info_hash;
+
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        let (requests, request_rx) = std::sync::mpsc::channel();
+        let (gate_tx, gate_rx) = std::sync::mpsc::channel();
+        let server = std::thread::spawn(move || {
+            fake_peer_gated(
+                listener,
+                data,
+                piece_length,
+                1,
+                info_hash,
+                requests,
+                gate_rx,
+            )
+        });
+
+        let dir = std::env::temp_dir().join(format!("ftc-blocks-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let (session, _progress) = Session::open(
+            torrent,
+            &dir,
+            Options {
+                max_peers: 1,
+                port: 6881,
+                use_dht: false,
+                limit_bps: None,
+            },
+        )
+        .unwrap();
+
+        let pause = session.pause_handle();
+        let worker = std::thread::spawn(move || session.run(Some(vec![address])));
+
+        request_rx
+            .recv_timeout(Duration::from_secs(2))
+            .expect("the peer never saw a block request");
+        pause.store(true, Ordering::Relaxed);
+        gate_tx.send(()).unwrap();
+
+        assert!(
+            request_rx.recv_timeout(Duration::from_millis(500)).is_err(),
+            "the client requested another block while paused"
+        );
+
+        pause.store(false, Ordering::Relaxed);
+        let stats = worker.join().unwrap().unwrap();
+        assert_eq!(stats.downloaded, piece_length as u64);
+
+        let _ = server.join();
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn stop_lands_between_blocks_and_reports_cancelled() {
+        let piece_length = 65_536usize;
+        let data: Vec<u8> = (0..piece_length as u32)
+            .map(|index| (index % 251) as u8)
+            .collect();
+        let raw = single_file_torrent("cancel.bin", &data, piece_length);
+        let torrent = Torrent::parse(&raw).unwrap();
+        let info_hash = torrent.info_hash;
+
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        let (requests, request_rx) = std::sync::mpsc::channel();
+        let (gate_tx, gate_rx) = std::sync::mpsc::channel();
+        let server = std::thread::spawn(move || {
+            fake_peer_gated(
+                listener,
+                data,
+                piece_length,
+                1,
+                info_hash,
+                requests,
+                gate_rx,
+            )
+        });
+
+        let dir = std::env::temp_dir().join(format!("ftc-cancel-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let (session, _progress) = Session::open(
+            torrent,
+            &dir,
+            Options {
+                max_peers: 1,
+                port: 6881,
+                use_dht: false,
+                limit_bps: None,
+            },
+        )
+        .unwrap();
+
+        let stop = session.stop_handle();
+        let worker = std::thread::spawn(move || session.run(Some(vec![address])));
+
+        request_rx
+            .recv_timeout(Duration::from_secs(2))
+            .expect("the peer never saw a block request");
+        stop.store(true, Ordering::Relaxed);
+        gate_tx.send(()).unwrap();
+
+        assert!(
+            matches!(worker.join().unwrap(), Err(Error::Cancelled)),
+            "stop did not surface as a cancellation"
         );
 
         let _ = server.join();

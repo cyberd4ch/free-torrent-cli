@@ -43,12 +43,15 @@ jobs:
           mkdir -p dist stage
           if [ "${{ runner.os }}" = "Windows" ]; then
             cp "target/${{ matrix.target }}/release/ftc.exe" stage/ftc.exe
+            # Brand alias without a second copy of the executable.
+            printf '@echo off\r\n"%%%%~dp0ftc.exe" %%%%*\r\n' > stage/footorrent.cmd
             powershell -NoProfile -Command \
-              "Compress-Archive -Path stage/ftc.exe -DestinationPath dist/ftc-${{ matrix.name }}.zip -Force"
+              "Compress-Archive -Path stage/ftc.exe,stage/footorrent.cmd -DestinationPath dist/ftc-${{ matrix.name }}.zip -Force"
           else
             cp "target/${{ matrix.target }}/release/ftc" stage/ftc
             chmod 755 stage/ftc
-            tar -czf "dist/ftc-${{ matrix.name }}.tar.gz" -C stage ftc
+            ln -s ftc stage/footorrent
+            tar -czf "dist/ftc-${{ matrix.name }}.tar.gz" -C stage ftc footorrent
           fi
           ls -l dist
       - uses: actions/upload-artifact@v4

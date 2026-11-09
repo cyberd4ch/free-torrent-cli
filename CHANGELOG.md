@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`footorrent` alias.** The installers now put a `footorrent` symlink (a
+  `.cmd` shim on Windows) beside `ftc`, and the release archives carry it too,
+  so the product name works without breaking the existing command or assets.
 - **Two-step magnet add.** Pasting a magnet and pressing Add now contacts the
   swarm, verifies the metadata, and reports the name, exact byte size, piece
   count and files found *before* anything is written. A second step asks where
@@ -55,6 +58,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Leftover `ftc` names in the window.** Notifications, the exported JSON file,
   the offline message and the docs version chips now say Footorrent; the
   command itself stays `ftc`, which is what the installers put on PATH.
+- **Failures hid the infohash.** The add dialog shortens the magnet in its error
+  message, so a dead-swarm report could not be looked up. Resolve failures now
+  include the full 40-character infohash before the peer errors.
 - **Healthy peers were rejected during metadata exchange.** A peer that sent a
   bitfield or an unchoke before its extension handshake was treated as not
   supporting `ut_metadata`, so magnets failed against ordinary clients even

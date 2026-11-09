@@ -719,7 +719,14 @@ fn resolve_target(state: &Arc<State>, body: &str) -> (u16, &'static str, Vec<u8>
             state.options.use_dht,
         ) {
             Ok(fetched) => fetched,
-            Err(err) => return bad(&format!("metadata exchange failed: {err}")),
+            // Include the full hash: the add dialog shortens the magnet in its
+            // own message, which made every failure report impossible to look up.
+            Err(err) => {
+                return bad(&format!(
+                    "metadata exchange failed for {}: {err}",
+                    hex::encode(link.info_hash)
+                ))
+            }
         };
         let peers = fetched.peers.clone();
         let fallback = fetched.fallback_trackers;

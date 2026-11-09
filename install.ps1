@@ -38,6 +38,10 @@ try {
     New-Item -ItemType Directory -Path $dest -Force | Out-Null
     Copy-Item (Join-Path $tmp 'ftc.exe') (Join-Path $dest 'ftc.exe') -Force
 
+    # Brand alias: a shim, not a second 1.5 MB copy.
+    $shim = "@echo off`r`n`"%~dp0ftc.exe`" %*`r`n"
+    Set-Content -Path (Join-Path $dest 'footorrent.cmd') -Value $shim -Encoding ASCII
+
     $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
     if ($userPath -notlike "*$dest*") {
         [Environment]::SetEnvironmentVariable('Path', ($userPath.TrimEnd(';') + ';' + $dest), 'User')
@@ -60,7 +64,7 @@ try {
         Write-Host "-> could not create the Start Menu shortcut: $($_.Exception.Message)"
     }
 
-    Write-Host "-> installed $dest\ftc.exe"
+    Write-Host "-> installed $dest\ftc.exe (alias: footorrent)"
     & (Join-Path $dest 'ftc.exe') --version
 }
 finally {
