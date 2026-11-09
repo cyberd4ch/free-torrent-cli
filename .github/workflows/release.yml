@@ -56,8 +56,8 @@ jobs:
           name: ftc-${{ matrix.name }}
           path: dist/*
 
-  # The macOS app: the same Rust binary plus the Rune window (gui/rune), hosted
-  # by a thin Swift launcher (gui/macos) that owns the server's lifetime.
+  # The macOS app: the same Rust binary plus a small Swift window (gui/macos),
+  # bundled so double-clicking gives an application window, not a browser tab.
   app-macos:
     runs-on: macos-latest
     steps:
@@ -68,8 +68,6 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Build the engine
         run: cargo build --release --target aarch64-apple-darwin -p free-torrent-cli
-      - name: Build the native window
-        run: cargo build --release --manifest-path gui/rune/Cargo.toml
       - name: Compile the window
         run: |
           set -euo pipefail
@@ -78,8 +76,6 @@ jobs:
           mkdir -p "$app/Contents/MacOS"
           cp "target/aarch64-apple-darwin/release/ftc" "$app/Contents/MacOS/ftc"
           chmod 755 "$app/Contents/MacOS/ftc"
-          cp gui/rune/target/release/footorrent-gui "$app/Contents/MacOS/footorrent-gui"
-          chmod 755 "$app/Contents/MacOS/footorrent-gui"
           swiftc -O gui/macos/main.swift -o "$app/Contents/MacOS/ftc-gui" \
             -framework AppKit -framework WebKit
           cat > "$app/Contents/Info.plist" <<PLIST

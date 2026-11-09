@@ -17,8 +17,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var window: NSWindow!
     private var webView: WKWebView!
     private var server: Process?
-    /// The Rune window, when `footorrent-gui` ships beside `ftc`.
-    private var rune: Process?
     private var output = ""
     /// Set once the server's URL has reached the web view. The startup watchdog
     /// must consult this, not `output`: the URL line used to be removed from
@@ -52,15 +50,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
-        // With the native window the host window is ordered out on purpose, so
-        // its disappearance must not quit the app: the Rune child's exit is the
-        // quit signal. Without Rune (web fallback) closing the window still quits.
-        rune == nil
+        true
     }
 
     func applicationWillTerminate(_ notification: Notification) {
-        // Both are children; neither must outlive the window.
-        stopRune()
+        // The server is a child process; it must not outlive the window.
         stopServer()
     }
 
@@ -173,7 +167,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             if !self.loaded, let url = self.firstURL(in: self.output) {
                 self.loaded = true
                 DispatchQueue.main.async {
-                    self.launchRune(url: url)
+                    self.webView.load(URLRequest(url: url))
                 }
             }
         }
@@ -194,48 +188,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         DispatchQueue.main.asyncAfter(deadline: .now() + 15) { [weak self] in
             guard let self, !self.loaded else { return }
             self.showError("The Footorrent server did not start.\n\n\(self.output)")
-        }
-    }
-
-    /// The Rune window is the native UI. Bundles without `footorrent-gui`
-    /// (a plain `ftc` install) keep the web view as the fallback.
-    private func launchRune(url: URL) {
-        guard let executable = Bundle.main.executablePath else { return }
-        let beside = (executable as NSString).deletingLastPathComponent + "/footorrent-gui"
-        guard FileManager.default.isExecutableFile(atPath: beside) else {
-            webView.load(URLRequest(url: url))
-            return
-        }
-
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: beside)
-        var environment = ProcessInfo.processInfo.environment
-        environment["FTC_URL"] = url.absoluteString
-        process.environment = environment
-        process.terminationHandler = { _ in
-            DispatchQueue.main.async { NSApp.terminate(nil) }
-        }
-        rune = process
-
-        do {
-            try process.run()
-            window.orderOut(nil)
-        } catch {
-            rune = nil
-            webView.load(URLRequest(url: url))
-        }
-    }
-
-    private func stopRune() {
-        guard let process = rune, process.isRunning else { return }
-        let pid = process.processIdentifier
-        rune = nil
-        process.terminate()
-        for _ in 0..<20 where process.isRunning {
-            usleep(50_000)
-        }
-        if process.isRunning {
-            kill(pid, SIGKILL)
         }
     }
 
