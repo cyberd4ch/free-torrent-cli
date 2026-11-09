@@ -84,7 +84,17 @@ pub fn fetch_from_peer(
                 let (id, size) = parse_extension_handshake(&payload)?;
                 break (id, size);
             }
-            Message::KeepAlive | Message::Have(_) | Message::Bitfield(_) => {}
+            // Real clients send ordinary wire traffic first (a bitfield, an
+            // unchoke); only a message we cannot handle is a reason to give up.
+            Message::KeepAlive
+            | Message::Choke
+            | Message::Unchoke
+            | Message::Interested
+            | Message::NotInterested
+            | Message::Have(_)
+            | Message::Bitfield(_)
+            | Message::Port(_)
+            | Message::Extended(..) => {}
             other => {
                 return Err(Error::Peer(format!(
                     "peer does not speak the extension protocol (message id {})",
@@ -134,7 +144,15 @@ pub fn fetch_from_peer(
                     metadata[start..start + chunk.len()].copy_from_slice(chunk);
                     break;
                 }
-                Message::Extended(0, _) | Message::KeepAlive | Message::Have(_) => {}
+                Message::KeepAlive
+                | Message::Choke
+                | Message::Unchoke
+                | Message::Interested
+                | Message::NotInterested
+                | Message::Have(_)
+                | Message::Bitfield(_)
+                | Message::Port(_)
+                | Message::Extended(..) => {}
                 other => {
                     return Err(Error::Peer(format!(
                         "expected metadata, got message id {}",
@@ -255,43 +273,64 @@ pub fn fetch_all(
         }
     }
 
-    // If every tracker was dead, blocked (UDP often is) or silent, the magnet
-    // still has a swarm — it is just reachable through the DHT. Asking it only
-    // when `trackers` was empty left those magnets stuck at zero peers.
-    if peers.is_empty() && use_dht {
-        eprintln!(
-            "no peers from {} tracker(s) — hunting the DHT for {}",
-            trackers.len(),
-            hex::encode(info_hash)
-        );
-        match from_dht(*info_hash, port) {
-            Ok(found) => peers.extend(found),
-            Err(err) => errors.push(err),
-        }
-    }
-
     let mut seen = std::collections::HashSet::new();
     peers.retain(|peer| seen.insert(*peer));
 
-    let mut last = errors.join("; ");
     // A peer that never answers costs a full read timeout; bound the whole
     // attempt so a magnet cannot sit in "fetching metadata" for ten minutes.
     let deadline = Instant::now() + METADATA_BUDGET;
-    for peer in peers.iter().take(30) {
-        let left = deadline.saturating_duration_since(Instant::now());
-        if left.is_zero() {
-            errors.push("metadata deadline reached".into());
+    let mut dht_used = false;
+    let mut tried = 0usize;
+    let mut last = errors.join("; ");
+    loop {
+        let end = (tried + 30).min(peers.len());
+        for peer in peers[tried..end].iter() {
+            let left = deadline.saturating_duration_since(Instant::now());
+            if left.is_zero() {
+                errors.push("metadata deadline reached".into());
+                break;
+            }
+            match fetch_peer_bounded(*peer, info_hash, peer_id, port, left.min(PEER_TIMEOUT)) {
+                Ok(info) => {
+                    return Ok(Resolved {
+                        info,
+                        peers: peers.clone(),
+                    })
+                }
+                Err(err) => {
+                    eprintln!("metadata from {peer} failed: {err}");
+                    last = format!("{peer}: {err}");
+                }
+            }
+        }
+        tried = peers.len();
+        if Instant::now() >= deadline {
             break;
         }
-        match fetch_peer_bounded(*peer, info_hash, peer_id, port, left.min(PEER_TIMEOUT)) {
-            Ok(info) => {
-                return Ok(Resolved {
-                    info,
-                    peers: peers.clone(),
-                })
+        // Trackers can hand back one dead or unfriendly peer; the swarm is
+        // still out there, so ask the DHT before calling the magnet dead.
+        if use_dht && !dht_used {
+            dht_used = true;
+            eprintln!(
+                "no metadata yet — asking the DHT for {}",
+                hex::encode(info_hash)
+            );
+            match from_dht(*info_hash, port) {
+                Ok(found) => {
+                    for peer in found {
+                        if seen.insert(peer) {
+                            peers.push(peer);
+                        }
+                    }
+                    if peers.len() > tried {
+                        continue;
+                    }
+                    errors.push("the DHT returned no new peers".into());
+                }
+                Err(err) => errors.push(err),
             }
-            Err(err) => last = format!("{peer}: {err}"),
         }
+        break;
     }
     if last.is_empty() {
         last = "no peers returned metadata".into();
@@ -341,6 +380,10 @@ mod tests {
             ),
             (b"metadata_size".to_vec(), Value::Int(metadata.len() as i64)),
         ]));
+        // Real clients chatter before the extension handshake (a bitfield, an
+        // unchoke); the fetch must ignore it instead of failing the exchange.
+        let _ = peer::write_message(&mut stream, &Message::Bitfield(vec![0xff]));
+        let _ = peer::write_message(&mut stream, &Message::Unchoke);
         let _ = peer::write_message(&mut stream, &Message::Extended(0, handshake));
 
         while let Ok(message) = peer::read_message(&mut stream) {

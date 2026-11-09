@@ -186,7 +186,12 @@ pub fn write_handshake<W: Write>(
     let mut packet = Vec::with_capacity(68);
     packet.push(PROTOCOL.len() as u8);
     packet.extend_from_slice(PROTOCOL);
-    packet.extend_from_slice(&[0u8; 8]);
+    // BEP 10: reserved[5] & 0x10 advertises the extension protocol. Without
+    // it a real peer never sends its extension handshake, so magnet metadata
+    // requests go unanswered no matter how many peers we find.
+    let mut reserved = [0u8; 8];
+    reserved[5] |= 0x10;
+    packet.extend_from_slice(&reserved);
     packet.extend_from_slice(info_hash);
     packet.extend_from_slice(peer_id);
     stream.write_all(&packet)?;

@@ -32,6 +32,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   stop after 8 s each (20 s for the whole list) and every peer exchange may use
   at most 15 s of the 120 s metadata budget, so a dead swarm fails with a clear
   error instead of leaving the add dialog spinning forever.
+- **Healthy peers were rejected during metadata exchange.** A peer that sent a
+  bitfield or an unchoke before its extension handshake was treated as not
+  supporting `ut_metadata`, so magnets failed against ordinary clients even
+  when the swarm was fine. Both metadata loops now ignore routine wire chatter,
+  and our handshake sets the BEP 10 extension bit so peers actually answer with
+  their extension handshake.
 
 ## [3.4.1] - 2026-11-09
 
