@@ -72,7 +72,10 @@ struct Job {
 struct Pending {
     token: u64,
     torrent: Torrent,
-    peers: usize,
+    /// Peers the metadata exchange already reached. Handing them to the
+    /// session matters when the magnet's own trackers are dead: re-announcing
+    /// to that same list found nobody and the download sat at zero.
+    peers: Vec<SocketAddr>,
 }
 
 impl Server {
@@ -688,7 +691,7 @@ fn spawn_download(
             Ok(torrent) => torrent,
             Err(message) => return finish(&state, id, "error", Some(message)),
         };
-        start_torrent(state, id, torrent, output, limit, start_paused);
+        start_torrent(state, id, torrent, output, limit, start_paused, Vec::new());
     });
 }
 
@@ -718,7 +721,7 @@ fn resolve_target(state: &Arc<State>, body: &str) -> (u16, &'static str, Vec<u8>
             Ok(fetched) => fetched,
             Err(err) => return bad(&format!("metadata exchange failed: {err}")),
         };
-        let peers = fetched.peers.len();
+        let peers = fetched.peers.clone();
         match Torrent::from_info(&fetched.info, &link.trackers) {
             Ok(torrent) => (torrent, peers),
             Err(err) => return bad(&err.to_string()),
@@ -729,7 +732,7 @@ fn resolve_target(state: &Arc<State>, body: &str) -> (u16, &'static str, Vec<u8>
             Err(err) => return bad(&format!("cannot read {target}: {err}")),
         };
         match Torrent::parse(&bytes) {
-            Ok(torrent) => (torrent, 0),
+            Ok(torrent) => (torrent, Vec::new()),
             Err(err) => return bad(&err.to_string()),
         }
     };
@@ -741,7 +744,7 @@ fn resolve_target(state: &Arc<State>, body: &str) -> (u16, &'static str, Vec<u8>
         http::json_escape(&torrent.name),
         torrent.total_length,
         torrent.piece_count(),
-        peers,
+        peers.len(),
         hex::encode(torrent.info_hash),
         files_json(&torrent)
     );
@@ -825,13 +828,22 @@ fn start_pending(state: &Arc<State>, body: &str) -> (u16, &'static str, Vec<u8>)
         error: None,
     });
     let peers = pending.peers;
+    let peer_count = peers.len();
     let worker_state = state.clone();
     // Run the download on its own thread: this response has to return as soon as
     // the job is registered, not when the last byte lands.
     std::thread::spawn(move || {
-        start_torrent(worker_state, id, pending.torrent, output, limit, paused);
+        start_torrent(
+            worker_state,
+            id,
+            pending.torrent,
+            output,
+            limit,
+            paused,
+            peers,
+        );
     });
-    json(200, format!("{{\"id\":{id},\"peers\":{peers}}}"))
+    json(200, format!("{{\"id\":{id},\"peers\":{peer_count}}}"))
 }
 
 fn discard_pending(state: &Arc<State>, body: &str) -> (u16, &'static str, Vec<u8>) {
@@ -854,6 +866,7 @@ fn start_torrent(
     output: PathBuf,
     limit: Option<u64>,
     start_paused: bool,
+    peers: Vec<SocketAddr>,
 ) {
     if is_cancelled(&state, id) {
         return;
@@ -892,7 +905,10 @@ fn start_torrent(
         };
     }
 
-    match session.run(None) {
+    // Use what the resolve already found instead of announcing to the same
+    // dead tracker list again.
+    let explicit = if peers.is_empty() { None } else { Some(peers) };
+    match session.run(explicit) {
         Ok(_) => finish(&state, id, "done", None),
         Err(Error::Cancelled) => finish(&state, id, "cancelled", None),
         Err(err) => finish(&state, id, "error", Some(err.to_string())),

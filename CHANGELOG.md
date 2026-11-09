@@ -36,6 +36,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   200-peer swarm is sampled within seconds instead of losing the 120 s budget
   to the first few silent hosts. Failures now report how many peers were tried
   and the last error instead of one misleading tracker message.
+- **A resolved magnet downloaded nothing.** The peers found while fetching
+  metadata were thrown away, so the download re-announced to the magnet's own
+  trackers — precisely the list that had just failed — and showed zero peers
+  forever. They are now handed straight to the session that starts the job.
 - **Healthy peers were rejected during metadata exchange.** A peer that sent a
   bitfield or an unchoke before its extension handshake was treated as not
   supporting `ut_metadata`, so magnets failed against ordinary clients even
