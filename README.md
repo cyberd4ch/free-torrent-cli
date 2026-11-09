@@ -31,8 +31,9 @@ curl -fsSL https://raw.githubusercontent.com/cyberd4ch/free-torrent-cli/main/ins
 
 Detects macOS or Linux and the CPU, downloads the matching archive, checks it
 against `SHA256SUMS`, and puts `ftc` on your PATH — `/usr/local/bin` when that is
-writable, `~/.local/bin` otherwise. No toolchain, no runtime, no sudo unless you
-ask for it.
+writable, `~/.local/bin` otherwise. It also installs **`footorrent`** beside it
+as an alias for the same binary; on Windows the installer writes
+`footorrent.cmd`. No toolchain, no runtime, no sudo unless you ask for it.
 
 On macOS it also installs **a real app**: `~/Applications/Footorrent.app`, a WKWebView
 window (87 KB of Swift, `gui/macos/main.swift`) that starts the server itself and
@@ -109,6 +110,18 @@ A magnet with no tracker still works: it hunts peers through the DHT, fetches
 the `info` dictionary from them (BEP 9/10), and verifies it against the info
 hash before writing a single byte.
 
+### Is the swarm dead, or is the client stuck?
+
+```bash
+ftc swarm "magnet:?xt=urn:btih:..."
+```
+
+Announces to every tracker in the link — falling back to public trackers when
+that list is dead — asks the DHT, dedupes the peers and TCP-probes them, then
+reports how many trackers answered and how many peers actually accept a
+connection. A magnet with 20 known peers and 2 reachable is a dead swarm, not a
+broken download.
+
 ## Web UI
 
 ```bash
@@ -140,7 +153,7 @@ Underneath it is a small JSON API, form-encoded on the way in:
 | `POST /api/pause` / `resume` | `id=<job>`, `ids=1,2,3` or `all=1` |
 | `POST /api/cancel` | `id=<job>`, `ids=1,2,3` or `all=1` |
 | `POST /api/remove` | drop finished jobs from the list: `id=`, `ids=` or `finished=1` |
-| `POST /api/retry` | queue a failed or stopped job again: `id=<job>` |
+| `POST /api/retry` | retry a stopped or failed job, or resume a paused one: `id=<job>` |
 | `POST /api/reveal` | show a job's file or folder in the file manager: `id=<job>` |
 
 Jobs report the engine's own `Arc<Progress>` atomics, so the page and the
@@ -183,7 +196,8 @@ than silently ignored.
 | DHT (BEP 5) — `get_peers` hunting and announce | ✅ |
 | Seeding (`--seed`) | ✅ |
 | Web UI + local JSON API (`ftc serve`) | ✅ |
-| Pause / resume / cancel from the page, engine-side | ✅ |
+| Pause / resume / stop / retry from the page, engine-side | ✅ |
+| Swarm diagnostics (`ftc swarm`) — trackers, DHT, TCP reachability | ✅ |
 | Download rate limit (`--limit`, per-job `limit`) | ✅ |
 
 ## How it's built
@@ -237,7 +251,7 @@ cargo clippy --all-targets -- -D warnings
 cargo fmt --all -- --check
 ```
 
-51 tests — 39 in the engine, 12 in the CLI. The suite is end-to-end where it
+63 tests — 41 in the engine, 22 in the CLI. The suite is end-to-end where it
 matters: a fake peer serves a real torrent and
 the session downloads, verifies and writes it; a fake router → holder chain over
 UDP exercises a full DHT hunt and a token-validated announce; a fake leecher
@@ -245,7 +259,8 @@ pulls one block from the seeder and is dropped for asking beyond the torrent.
 
 ## Roadmap
 
-1. A desktop front end on top of the local JSON API.
+1. A native Windows front end on the same local JSON API (the macOS app already
+   runs on it).
 
 ## License
 
