@@ -44,7 +44,10 @@ jobs:
           if [ "${{ runner.os }}" = "Windows" ]; then
             cp "target/${{ matrix.target }}/release/ftc.exe" stage/ftc.exe
             # Brand alias without a second copy of the executable.
-            printf '@echo off\r\n"%%%%~dp0ftc.exe" %%%%*\r\n' > stage/footorrent.cmd
+            # printf halves %% — the file must contain a single %~dp0, or cmd
+            # treats the literal quotes as part of a command name.
+            printf '@echo off\r\n"%%~dp0ftc.exe" %%*\r\n' > stage/footorrent.cmd
+            cmd //c "stage\\footorrent.cmd --version"
             powershell -NoProfile -Command \
               "Compress-Archive -Path stage/ftc.exe,stage/footorrent.cmd -DestinationPath dist/ftc-${{ matrix.name }}.zip -Force"
           else
