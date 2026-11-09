@@ -422,6 +422,22 @@ struct Shared {
 }
 
 impl Shared {
+    /// Park while paused, or bail out if a stop arrived. Called between blocks
+    /// so Pause and Stop land within one 16 KiB block instead of at the end of
+    /// a 256 KiB piece that can take seconds on a slow peer.
+    fn checkpoint(&self) -> Result<()> {
+        while self.pause.load(Ordering::Relaxed) {
+            if self.stop.load(Ordering::Relaxed) {
+                return Err(Error::Cancelled);
+            }
+            std::thread::sleep(Duration::from_millis(50));
+        }
+        if self.stop.load(Ordering::Relaxed) {
+            return Err(Error::Cancelled);
+        }
+        Ok(())
+    }
+
     fn worker_loop(&self) {
         loop {
             if self.stop.load(Ordering::Relaxed) {
@@ -532,6 +548,7 @@ impl Shared {
 
         let mut piece = vec![0u8; self.torrent.piece_size(index) as usize];
         for (begin, length) in peer::pick_blocks(piece.len() as u64, BLOCK_SIZE) {
+            self.checkpoint()?;
             // Pay the wait before asking for the block, so a fast peer cannot
             // race ahead of the cap.
             if let Some(throttle) = &self.throttle {

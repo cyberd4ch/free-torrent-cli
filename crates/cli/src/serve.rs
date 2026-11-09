@@ -978,11 +978,17 @@ struct View<'a> {
 
 fn view(job: &Job) -> View<'_> {
     let snapshot = job.progress.as_ref().map(|progress| progress.snapshot());
-    let speed = job
-        .progress
-        .as_ref()
-        .map(|progress| progress.bytes_per_second())
-        .unwrap_or(0.0);
+    // Average throughput only means "running" while bytes are moving. A paused,
+    // stopped or finished job used to keep reporting its lifetime average, so
+    // the status bar looked like a download was still going after Remove.
+    let speed = if job.status == "downloading" {
+        job.progress
+            .as_ref()
+            .map(|progress| progress.bytes_per_second())
+            .unwrap_or(0.0)
+    } else {
+        0.0
+    };
     let (total, downloaded, pieces, verified, peers, elapsed, peer_list) = match snapshot {
         Some(snapshot) => (
             snapshot.total,

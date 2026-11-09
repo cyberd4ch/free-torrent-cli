@@ -44,6 +44,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   metadata were thrown away, so the download re-announced to the magnet's own
   trackers — precisely the list that had just failed — and showed zero peers
   forever. They are now handed straight to the session that starts the job.
+- **Pause and Stop did nothing for seconds.** Both were checked only when the
+  next piece began, so a slow peer kept the transfer alive for a whole 256 KiB
+  piece. Workers now check between 16 KiB blocks, and Stop returns promptly.
+- **The speed meter kept running after Pause, Stop or Remove.** Per-job speed was
+  its lifetime average regardless of state, and the totals summed those
+  averages, so a paused or cancelled job still looked like live traffic. Speed
+  is now zero unless the job is downloading, and the graph clears when the list
+  is emptied.
 - **Healthy peers were rejected during metadata exchange.** A peer that sent a
   bitfield or an unchoke before its extension handshake was treated as not
   supporting `ut_metadata`, so magnets failed against ordinary clients even

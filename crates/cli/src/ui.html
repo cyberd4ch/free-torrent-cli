@@ -1873,8 +1873,14 @@
             }
             app.statuses = statuses;
 
-            app.history.push(app.totals.speed || 0);
-            if (app.history.length > 60) app.history.shift();
+            if (!app.jobs.length) {
+                // Nothing left to plot: leaving the last points makes the graph
+                // claim traffic after the list was emptied.
+                app.history = [];
+            } else {
+                app.history.push(app.totals.speed || 0);
+                if (app.history.length > 60) app.history.shift();
+            }
 
             const ids = new Set(app.jobs.map((job) => job.id));
             for (const id of [...app.selected]) if (!ids.has(id)) app.selected.delete(id);
