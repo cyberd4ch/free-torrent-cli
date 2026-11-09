@@ -11,13 +11,21 @@ use crate::peer::{self, Message};
 use crate::tracker::{self, AnnounceRequest};
 use sha1::{Digest, Sha1};
 use std::net::{SocketAddr, TcpStream};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 pub const METADATA_PIECE: usize = 16 * 1024;
 const MAX_METADATA: usize = 8 * 1024 * 1024;
 const UT_METADATA: &[u8] = b"ut_metadata";
 /// Waiting time for one trackerless-magnet DHT hunt.
 const DHT_HUNT: Duration = Duration::from_secs(15);
+/// Upper bound on one metadata resolution, across every peer we try.
+const METADATA_BUDGET: Duration = Duration::from_secs(120);
+/// Per-tracker wait, and the cap for the whole announce list.
+const TRACKER_TIMEOUT: Duration = Duration::from_secs(8);
+const TRACKER_BUDGET: Duration = Duration::from_secs(20);
+/// The handshake alone can block for 10 s and every read for 20 s, so one dead
+/// peer used to eat half a minute; cap each peer by what is left of the budget.
+const PEER_TIMEOUT: Duration = Duration::from_secs(15);
 
 pub fn extension_handshake(port: u16) -> Vec<u8> {
     bencode::encode(&Value::Dict(vec![
@@ -148,7 +156,15 @@ pub fn fetch_from_peer(
 }
 
 /// Ask trackers for peers and try them in turn until one serves valid
-/// metadata; a trackerless magnet falls back to the DHT (BEP 5).
+/// metadata; the DHT (BEP 5) is asked whenever the announce list comes back
+/// empty, whether the magnet carried no trackers or simply dead ones.
+pub struct Resolved {
+    /// The raw `info` dictionary, verified against the magnet's hash.
+    pub info: Vec<u8>,
+    /// Peers the swarm offered, whether or not they served the metadata.
+    pub peers: Vec<SocketAddr>,
+}
+
 pub fn fetch(
     trackers: &[String],
     info_hash: &[u8; 20],
@@ -156,48 +172,148 @@ pub fn fetch(
     port: u16,
     use_dht: bool,
 ) -> Result<Vec<u8>> {
-    let mut peers = Vec::new();
-    let mut errors = Vec::new();
+    fetch_all(trackers, info_hash, peer_id, port, use_dht).map(|resolved| resolved.info)
+}
+
+/// A tracker that accepts the connection but never answers would otherwise
+/// block the whole resolve, leaving the add dialog spinning forever. UDP and
+/// HTTP announces both run on a helper thread so the caller keeps a deadline.
+fn announce_bounded(
+    url: &str,
+    request: &AnnounceRequest,
+    timeout: std::time::Duration,
+) -> Result<tracker::AnnounceResponse> {
+    let (sender, receiver) = std::sync::mpsc::channel();
+    let url = url.to_string();
+    let request = *request;
+    std::thread::spawn(move || {
+        let _ = sender.send(tracker::announce(&url, &request));
+    });
+    match receiver.recv_timeout(timeout) {
+        Ok(result) => result,
+        Err(_) => Err(Error::Tracker(format!(
+            "no answer within {}s",
+            timeout.as_secs()
+        ))),
+    }
+}
+
+/// Run one peer exchange on a helper thread so a stalled handshake cannot push
+/// the resolve past its deadline.
+fn fetch_peer_bounded(
+    address: SocketAddr,
+    info_hash: &[u8; 20],
+    peer_id: &[u8; 20],
+    port: u16,
+    timeout: Duration,
+) -> Result<Vec<u8>> {
+    let (sender, receiver) = std::sync::mpsc::channel();
+    let info_hash = *info_hash;
+    let peer_id = *peer_id;
+    std::thread::spawn(move || {
+        let _ = sender.send(fetch_from_peer(address, &info_hash, &peer_id, port));
+    });
+    match receiver.recv_timeout(timeout) {
+        Ok(result) => result,
+        Err(_) => Err(Error::Peer(format!(
+            "no answer within {}s",
+            timeout.as_secs()
+        ))),
+    }
+}
+
+/// Like [`fetch`], but also reports the peers that were discovered, so the UI
+/// can show the connection set it is about to use before a byte is written.
+pub fn fetch_all(
+    trackers: &[String],
+    info_hash: &[u8; 20],
+    peer_id: &[u8; 20],
+    port: u16,
+    use_dht: bool,
+) -> Result<Resolved> {
     if trackers.is_empty() && !use_dht {
         return Err(Error::Tracker(
             "magnet has no trackers and DHT discovery is disabled".into(),
         ));
     }
-    if trackers.is_empty() {
-        eprintln!("magnet has no trackers — hunting peers via the DHT");
-        let node = Dht::boot(dht::random_node_id(), port)
-            .map_err(|err| Error::Tracker(format!("DHT bootstrap failed: {err}")))?;
-        let found = node.peer_hunt(*info_hash, 30, DHT_HUNT);
-        if found.is_empty() {
-            return Err(Error::Tracker(
-                "magnet has no trackers and the DHT found no peers".into(),
-            ));
-        }
-        peers.extend(found);
-    }
 
+    let mut peers = Vec::new();
+    let mut errors = Vec::new();
     let request = AnnounceRequest::new(*info_hash, *peer_id, 0, METADATA_PIECE as u64);
+    // Trackers get a bounded slice of the budget: a dead swarm should fail in
+    // seconds, not pin the dialog until the metadata budget runs out.
+    let tracker_deadline = Instant::now() + TRACKER_BUDGET;
     for url in trackers {
-        match tracker::announce(url, &request) {
+        let left = tracker_deadline.saturating_duration_since(Instant::now());
+        if left.is_zero() {
+            errors.push("tracker deadline reached".into());
+            break;
+        }
+        match announce_bounded(url, &request, left.min(TRACKER_TIMEOUT)) {
             Ok(response) => peers.extend(response.peers.into_iter().filter(|peer| peer.is_ipv4())),
             Err(err) => errors.push(format!("{url}: {err}")),
         }
     }
+
+    // If every tracker was dead, blocked (UDP often is) or silent, the magnet
+    // still has a swarm — it is just reachable through the DHT. Asking it only
+    // when `trackers` was empty left those magnets stuck at zero peers.
+    if peers.is_empty() && use_dht {
+        eprintln!(
+            "no peers from {} tracker(s) — hunting the DHT for {}",
+            trackers.len(),
+            hex::encode(info_hash)
+        );
+        match from_dht(*info_hash, port) {
+            Ok(found) => peers.extend(found),
+            Err(err) => errors.push(err),
+        }
+    }
+
     let mut seen = std::collections::HashSet::new();
     peers.retain(|peer| seen.insert(*peer));
 
     let mut last = errors.join("; ");
+    // A peer that never answers costs a full read timeout; bound the whole
+    // attempt so a magnet cannot sit in "fetching metadata" for ten minutes.
+    let deadline = Instant::now() + METADATA_BUDGET;
     for peer in peers.iter().take(30) {
-        match fetch_from_peer(*peer, info_hash, peer_id, port) {
-            Ok(metadata) => return Ok(metadata),
+        let left = deadline.saturating_duration_since(Instant::now());
+        if left.is_zero() {
+            errors.push("metadata deadline reached".into());
+            break;
+        }
+        match fetch_peer_bounded(*peer, info_hash, peer_id, port, left.min(PEER_TIMEOUT)) {
+            Ok(info) => {
+                return Ok(Resolved {
+                    info,
+                    peers: peers.clone(),
+                })
+            }
             Err(err) => last = format!("{peer}: {err}"),
         }
     }
-    Err(Error::Peer(if last.is_empty() {
-        "no peers returned metadata".into()
-    } else {
-        last
-    }))
+    if last.is_empty() {
+        last = "no peers returned metadata".into();
+    }
+    Err(Error::Peer(last))
+}
+
+/// Boot a DHT node and look for peers. The configured port may already be
+/// taken (a second magnet resolving, another client seeding), so retry on an
+/// ephemeral port rather than failing the whole resolution.
+fn from_dht(info_hash: [u8; 20], port: u16) -> std::result::Result<Vec<SocketAddr>, String> {
+    let node = match Dht::boot(dht::random_node_id(), port) {
+        Ok(node) => node,
+        Err(first) => Dht::boot(dht::random_node_id(), 0).map_err(|second| {
+            format!("DHT bootstrap failed on port {port} ({first}) and on a free port ({second})")
+        })?,
+    };
+    let found = node.peer_hunt(info_hash, 30, DHT_HUNT);
+    if found.is_empty() {
+        return Err("the DHT returned no peers".into());
+    }
+    Ok(found)
 }
 
 #[cfg(test)]

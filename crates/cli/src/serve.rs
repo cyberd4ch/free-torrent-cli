@@ -8,7 +8,7 @@ use crate::http::{self, Request};
 use crate::parse_rate;
 use ftc_core::error::Error;
 use ftc_core::magnet;
-use ftc_core::session::{make_peer_id, Options};
+use ftc_core::session::{make_peer_id, Options, PeerView};
 use ftc_core::{Progress, Session, Torrent};
 use std::io;
 use std::net::{SocketAddr, TcpListener, TcpStream};
@@ -21,9 +21,13 @@ const UI: &str = include_str!("ui.html");
 
 /// Served at `/favicon.ico` so a browser never logs a failed icon request.
 const ICON: &str = "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'>\
-<rect width='32' height='32' rx='8' fill='#111318'/>\
-<g fill='none' stroke='#ff7a2f' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'>\
-<path d='M16 7v13'/><path d='M10 15l6 6 6-6'/><path d='M8 26h16'/></g></svg>";
+<rect width='32' height='32' rx='7' fill='#14161c'/>\
+<g fill='#ff7a2f'>\
+<circle cx='10' cy='9' r='2.1'/><circle cx='15' cy='7' r='2.3'/><circle cx='20' cy='7.6' r='2.1'/>\
+<circle cx='24' cy='10' r='1.8'/>\
+<path d='M11.5 13c2.6-1.2 6.6-1.2 9.1 0 1.7.8 2.3 2.7 1.8 5.1-.6 3-1.8 4.9-3.7 6.3-.9.7-1.4.7-2.3 0-1.9-1.4-3.1-3.3-3.7-6.3-.5-2.4.1-4.3 1.8-5.1z'/>\
+</g>\
+<path d='M16 15.5v5m0 0-2.6-2.6M16 20.5l2.6-2.6' fill='none' stroke='#14161c' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/></svg>";
 
 pub struct Server {
     listener: TcpListener,
@@ -32,6 +36,8 @@ pub struct Server {
 
 struct State {
     jobs: Mutex<Vec<Job>>,
+    /// Resolved magnets waiting for the user to confirm a destination.
+    pending: Mutex<Vec<Pending>>,
     next_id: AtomicU64,
     settings: Mutex<Settings>,
     options: Options,
@@ -61,6 +67,14 @@ struct Job {
     error: Option<String>,
 }
 
+/// A magnet whose metadata has been fetched, but whose destination the user has
+/// not confirmed yet. Nothing is written to disk until `/api/start` runs.
+struct Pending {
+    token: u64,
+    torrent: Torrent,
+    peers: usize,
+}
+
 impl Server {
     pub fn bind(bind: &str, port: u16, output: PathBuf, options: Options) -> io::Result<Server> {
         let listener = TcpListener::bind((bind, port))?;
@@ -68,6 +82,7 @@ impl Server {
             listener,
             state: Arc::new(State {
                 jobs: Mutex::new(Vec::new()),
+                pending: Mutex::new(Vec::new()),
                 next_id: AtomicU64::new(1),
                 settings: Mutex::new(Settings {
                     output,
@@ -117,6 +132,9 @@ fn route(state: &Arc<State>, request: &Request) -> (u16, &'static str, Vec<u8>) 
         ("GET", "/api/settings") => (200, JSON, settings_json(state).into_bytes()),
         ("POST", "/api/settings") => change_settings(state, &request.body),
         ("POST", "/api/add") => add(state, &request.body),
+        ("POST", "/api/resolve") => resolve_target(state, &request.body),
+        ("POST", "/api/start") => start_pending(state, &request.body),
+        ("POST", "/api/discard") => discard_pending(state, &request.body),
         ("POST", "/api/add-torrent") => add_torrent(state, &request.body),
         ("POST", "/api/cancel") => cancel(state, &request.body),
         ("POST", "/api/pause") => pause(state, &request.body, true),
@@ -127,6 +145,9 @@ fn route(state: &Arc<State>, request: &Request) -> (u16, &'static str, Vec<u8>) 
         (_, "/favicon.ico") => (200, "image/svg+xml", ICON.as_bytes().to_vec()),
         (_, "/api/add")
         | (_, "/api/add-torrent")
+        | (_, "/api/resolve")
+        | (_, "/api/start")
+        | (_, "/api/discard")
         | (_, "/api/cancel")
         | (_, "/api/pause")
         | (_, "/api/resume")
@@ -244,10 +265,16 @@ fn add(state: &Arc<State>, body: &str) -> (u16, &'static str, Vec<u8>) {
     let paused = matches!(field(&form, "paused").as_deref(), Some("1" | "true" | "on"));
 
     let id = state.next_id.fetch_add(1, Ordering::Relaxed);
+    // A magnet's display name lets the row read as a title while the metadata
+    // is still being fetched, instead of showing 300 characters of URI.
+    let display_name = magnet::parse(&target)
+        .ok()
+        .and_then(|link| link.name)
+        .unwrap_or_default();
     state.jobs.lock().unwrap().push(Job {
         id,
         target: target.clone(),
-        name: String::new(),
+        name: display_name,
         output: output.clone(),
         status: if paused { "paused" } else { "metadata" },
         total: 0,
@@ -661,49 +688,215 @@ fn spawn_download(
             Ok(torrent) => torrent,
             Err(message) => return finish(&state, id, "error", Some(message)),
         };
-        if is_cancelled(&state, id) {
+        start_torrent(state, id, torrent, output, limit, start_paused);
+    });
+}
+
+/// First half of the two-step add: contact the swarm, fetch and verify the
+/// metadata, and report the name, exact size and file list. The torrent is
+/// parked under a token; no directory is created and no byte is written until
+/// `/api/start` names a folder.
+fn resolve_target(state: &Arc<State>, body: &str) -> (u16, &'static str, Vec<u8>) {
+    let form = http::form_pairs(body);
+    let Some(target) = field(&form, "target") else {
+        return bad("missing target");
+    };
+
+    let (torrent, peers) = if target.starts_with("magnet:") {
+        let link = match magnet::parse(&target) {
+            Ok(link) => link,
+            Err(err) => return bad(&err.to_string()),
+        };
+        let peer_id = make_peer_id();
+        let fetched = match ftc_core::metadata::fetch_all(
+            &link.trackers,
+            &link.info_hash,
+            &peer_id,
+            state.options.port,
+            state.options.use_dht,
+        ) {
+            Ok(fetched) => fetched,
+            Err(err) => return bad(&format!("metadata exchange failed: {err}")),
+        };
+        let peers = fetched.peers.len();
+        match Torrent::from_info(&fetched.info, &link.trackers) {
+            Ok(torrent) => (torrent, peers),
+            Err(err) => return bad(&err.to_string()),
+        }
+    } else {
+        let bytes = match std::fs::read(&target) {
+            Ok(bytes) => bytes,
+            Err(err) => return bad(&format!("cannot read {target}: {err}")),
+        };
+        match Torrent::parse(&bytes) {
+            Ok(torrent) => (torrent, 0),
+            Err(err) => return bad(&err.to_string()),
+        }
+    };
+
+    let token = state.next_id.fetch_add(1, Ordering::Relaxed);
+    let body = format!(
+        "{{\"token\":{token},\"name\":\"{}\",\"total\":{},\"pieces\":{},\"peers\":{},\
+         \"info_hash\":\"{}\",\"files\":{}}}",
+        http::json_escape(&torrent.name),
+        torrent.total_length,
+        torrent.piece_count(),
+        peers,
+        hex::encode(torrent.info_hash),
+        files_json(&torrent)
+    );
+    state.pending.lock().unwrap().push(Pending {
+        token,
+        torrent,
+        peers,
+    });
+    json(200, body)
+}
+
+fn files_json(torrent: &Torrent) -> String {
+    let mut out = String::from("[");
+    for (index, file) in torrent.files.iter().enumerate() {
+        if index > 0 {
+            out.push(',');
+        }
+        out.push_str(&format!(
+            "{{\"path\":\"{}\",\"length\":{}}}",
+            http::json_escape(&file.path.display().to_string()),
+            file.length
+        ));
+    }
+    out.push(']');
+    out
+}
+
+/// Second half: the user picked a folder, so the download may touch the disk.
+fn start_pending(state: &Arc<State>, body: &str) -> (u16, &'static str, Vec<u8>) {
+    let form = http::form_pairs(body);
+    let Some(token) = field(&form, "token").and_then(|value| value.parse::<u64>().ok()) else {
+        return bad("missing token");
+    };
+    let settings = state.settings.lock().unwrap().clone();
+    let output = field(&form, "output")
+        .map(PathBuf::from)
+        .unwrap_or(settings.output);
+    if let Err(err) = std::fs::create_dir_all(&output) {
+        return bad(&format!("cannot create {}: {err}", output.display()));
+    }
+    let limit = match field(&form, "limit") {
+        Some(value) => match parse_rate(&value) {
+            Ok(rate) => Some(rate),
+            Err(message) => return bad(&message),
+        },
+        None => settings.limit,
+    };
+    let paused = matches!(field(&form, "paused").as_deref(), Some("1" | "true" | "on"));
+
+    let position = state
+        .pending
+        .lock()
+        .unwrap()
+        .iter()
+        .position(|entry| entry.token == token);
+    let Some(position) = position else {
+        return (
+            404,
+            "text/plain; charset=utf-8",
+            b"no such pending download".to_vec(),
+        );
+    };
+    let pending = state.pending.lock().unwrap().remove(position);
+
+    let id = state.next_id.fetch_add(1, Ordering::Relaxed);
+    let name = pending.torrent.name.clone();
+    let total = pending.torrent.total_length;
+    state.jobs.lock().unwrap().push(Job {
+        id,
+        target: name.clone(),
+        name,
+        output: output.clone(),
+        status: if paused { "paused" } else { "metadata" },
+        total,
+        limit,
+        added: now_secs(),
+        finished: None,
+        progress: None,
+        stop: None,
+        pause: None,
+        error: None,
+    });
+    let peers = pending.peers;
+    let worker_state = state.clone();
+    // Run the download on its own thread: this response has to return as soon as
+    // the job is registered, not when the last byte lands.
+    std::thread::spawn(move || {
+        start_torrent(worker_state, id, pending.torrent, output, limit, paused);
+    });
+    json(200, format!("{{\"id\":{id},\"peers\":{peers}}}"))
+}
+
+fn discard_pending(state: &Arc<State>, body: &str) -> (u16, &'static str, Vec<u8>) {
+    let form = http::form_pairs(body);
+    let Some(token) = field(&form, "token").and_then(|value| value.parse::<u64>().ok()) else {
+        return bad("missing token");
+    };
+    state
+        .pending
+        .lock()
+        .unwrap()
+        .retain(|entry| entry.token != token);
+    json(200, "{\"discarded\":true}".to_string())
+}
+
+fn start_torrent(
+    state: Arc<State>,
+    id: u64,
+    torrent: Torrent,
+    output: PathBuf,
+    limit: Option<u64>,
+    start_paused: bool,
+) {
+    if is_cancelled(&state, id) {
+        return;
+    }
+
+    let mut options = state.options.clone();
+    options.limit_bps = limit;
+    let (session, progress) = match Session::open(torrent, &output, options) {
+        Ok(opened) => opened,
+        Err(err) => return finish(&state, id, "error", Some(err.to_string())),
+    };
+    let stop = session.stop_handle();
+    let pause = session.pause_handle();
+    if start_paused {
+        pause.store(true, Ordering::Relaxed);
+    }
+    let name = session.torrent().name.clone();
+    let total = session.torrent().total_length;
+    {
+        let mut jobs = state.jobs.lock().unwrap();
+        let Some(job) = jobs.iter_mut().find(|job| job.id == id) else {
+            return;
+        };
+        if job.status == "cancelled" {
             return;
         }
-
-        let mut options = state.options.clone();
-        options.limit_bps = limit;
-        let (session, progress) = match Session::open(torrent, &output, options) {
-            Ok(opened) => opened,
-            Err(err) => return finish(&state, id, "error", Some(err.to_string())),
+        job.name = name;
+        job.total = total;
+        job.progress = Some(progress);
+        job.stop = Some(stop);
+        job.pause = Some(pause);
+        job.status = if start_paused {
+            "paused"
+        } else {
+            "downloading"
         };
-        let stop = session.stop_handle();
-        let pause = session.pause_handle();
-        if start_paused {
-            pause.store(true, Ordering::Relaxed);
-        }
-        let name = session.torrent().name.clone();
-        let total = session.torrent().total_length;
-        {
-            let mut jobs = state.jobs.lock().unwrap();
-            let Some(job) = jobs.iter_mut().find(|job| job.id == id) else {
-                return;
-            };
-            if job.status == "cancelled" {
-                return;
-            }
-            job.name = name;
-            job.total = total;
-            job.progress = Some(progress);
-            job.stop = Some(stop);
-            job.pause = Some(pause);
-            job.status = if start_paused {
-                "paused"
-            } else {
-                "downloading"
-            };
-        }
+    }
 
-        match session.run(None) {
-            Ok(_) => finish(&state, id, "done", None),
-            Err(Error::Cancelled) => finish(&state, id, "cancelled", None),
-            Err(err) => finish(&state, id, "error", Some(err.to_string())),
-        }
-    });
+    match session.run(None) {
+        Ok(_) => finish(&state, id, "done", None),
+        Err(Error::Cancelled) => finish(&state, id, "cancelled", None),
+        Err(err) => finish(&state, id, "error", Some(err.to_string())),
+    }
 }
 
 fn resolve(target: &str, options: &Options) -> Result<Torrent, String> {
@@ -762,6 +955,7 @@ struct View<'a> {
     elapsed: f64,
     percent: u64,
     path: PathBuf,
+    peer_list: Vec<PeerView>,
 }
 
 fn view(job: &Job) -> View<'_> {
@@ -771,7 +965,7 @@ fn view(job: &Job) -> View<'_> {
         .as_ref()
         .map(|progress| progress.bytes_per_second())
         .unwrap_or(0.0);
-    let (total, downloaded, pieces, verified, peers, elapsed) = match snapshot {
+    let (total, downloaded, pieces, verified, peers, elapsed, peer_list) = match snapshot {
         Some(snapshot) => (
             snapshot.total,
             snapshot.downloaded,
@@ -779,8 +973,9 @@ fn view(job: &Job) -> View<'_> {
             snapshot.verified,
             snapshot.active_peers,
             snapshot.elapsed.as_secs_f64(),
+            snapshot.peers,
         ),
-        None => (job.total, 0, 0, 0, 0, 0.0),
+        None => (job.total, 0, 0, 0, 0, 0.0, Vec::new()),
     };
     let percent = if job.status == "done" {
         100
@@ -806,6 +1001,7 @@ fn view(job: &Job) -> View<'_> {
         elapsed,
         percent,
         path,
+        peer_list,
     }
 }
 
@@ -859,7 +1055,7 @@ fn state_json(state: &State) -> String {
             "{{\"id\":{},\"target\":\"{}\",\"name\":\"{}\",\"output\":\"{}\",\"path\":\"{}\",\
              \"status\":\"{}\",\"total\":{},\"downloaded\":{},\"percent\":{},\"limit\":{limit},\
              \"pieces\":{},\"verified\":{},\"peers\":{},\"speed\":{:.1},\"elapsed\":{:.1},\
-             \"added\":{},\"finished\":{finished},\"error\":{error}}}",
+             \"added\":{},\"finished\":{finished},\"error\":{error},\"peer_list\":{}}}",
             job.id,
             http::json_escape(&job.target),
             http::json_escape(&job.name),
@@ -875,9 +1071,25 @@ fn state_json(state: &State) -> String {
             view.speed,
             view.elapsed,
             job.added,
+            peer_list_json(&view.peer_list),
         ));
     }
     out.push_str("]}");
+    out
+}
+
+fn peer_list_json(peers: &[PeerView]) -> String {
+    let mut out = String::from("[");
+    for (index, peer) in peers.iter().enumerate() {
+        if index > 0 {
+            out.push(',');
+        }
+        out.push_str(&format!(
+            "{{\"address\":\"{}\",\"state\":\"{}\",\"bytes\":{}}}",
+            peer.address, peer.state, peer.bytes
+        ));
+    }
+    out.push(']');
     out
 }
 

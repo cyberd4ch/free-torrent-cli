@@ -1,8 +1,11 @@
 <div align="center">
 
-# ftc
+# Footorrent
 
-### A BitTorrent client in one ~3 MB binary.
+### Small footprint. Big downloads.
+
+**A BitTorrent client in one ~3 MB binary.** `ftc` is the command; **Footorrent**
+is the product. The brand book is in [`BRAND.md`](BRAND.md).
 
 **Rust · from scratch · no libtorrent · no Electron · no runtime to install**
 
@@ -31,7 +34,7 @@ against `SHA256SUMS`, and puts `ftc` on your PATH — `/usr/local/bin` when that
 writable, `~/.local/bin` otherwise. No toolchain, no runtime, no sudo unless you
 ask for it.
 
-On macOS it also installs **a real app**: `~/Applications/ftc.app`, a WKWebView
+On macOS it also installs **a real app**: `~/Applications/Footorrent.app`, a WKWebView
 window (87 KB of Swift, `gui/macos/main.swift`) that starts the server itself and
 quits it when you close the window. Released as `ftc-macos-app.zip`. On Windows
 the installer adds a Start Menu entry and on Linux a `ftc.desktop` file, both

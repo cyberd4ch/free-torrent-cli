@@ -51,9 +51,18 @@ pub struct Progress {
     active_peers: AtomicUsize,
     done: AtomicBool,
     started: Instant,
+    peers: Mutex<Vec<PeerView>>,
 }
 
-#[derive(Debug, Clone, Copy)]
+/// One connection the swarm offered us, and what it is doing right now.
+#[derive(Debug, Clone)]
+pub struct PeerView {
+    pub address: SocketAddr,
+    pub state: &'static str,
+    pub bytes: u64,
+}
+
+#[derive(Debug, Clone)]
 pub struct Snapshot {
     pub total: u64,
     pub downloaded: u64,
@@ -62,6 +71,7 @@ pub struct Snapshot {
     pub active_peers: usize,
     pub done: bool,
     pub elapsed: Duration,
+    pub peers: Vec<PeerView>,
 }
 
 impl Progress {
@@ -74,6 +84,42 @@ impl Progress {
             active_peers: self.active_peers.load(Ordering::Relaxed),
             done: self.done.load(Ordering::Relaxed),
             elapsed: self.started.elapsed(),
+            peers: self.peers.lock().unwrap().clone(),
+        }
+    }
+
+    /// Record a peer the swarm handed us, so the UI can list the connection
+    /// set even before a piece has been requested from it.
+    pub fn track_peer(&self, address: SocketAddr) {
+        let mut peers = self.peers.lock().unwrap();
+        if peers.iter().any(|peer| peer.address == address) {
+            return;
+        }
+        if peers.len() < 200 {
+            peers.push(PeerView {
+                address,
+                state: "idle",
+                bytes: 0,
+            });
+        }
+    }
+
+    pub fn mark_peer(&self, address: SocketAddr, state: &'static str) {
+        let mut peers = self.peers.lock().unwrap();
+        match peers.iter_mut().find(|peer| peer.address == address) {
+            Some(peer) => peer.state = state,
+            None => peers.push(PeerView {
+                address,
+                state,
+                bytes: 0,
+            }),
+        }
+    }
+
+    pub fn add_peer_bytes(&self, address: SocketAddr, bytes: u64) {
+        let mut peers = self.peers.lock().unwrap();
+        if let Some(peer) = peers.iter_mut().find(|peer| peer.address == address) {
+            peer.bytes += bytes;
         }
     }
 
@@ -172,6 +218,7 @@ impl Session {
             active_peers: AtomicUsize::new(0),
             done: AtomicBool::new(missing.is_empty()),
             started: Instant::now(),
+            peers: Mutex::new(Vec::new()),
         });
         let throttle = options.limit_bps.map(Throttle::new).map(Arc::new);
         let session = Session {
@@ -324,6 +371,11 @@ impl Session {
         }
         let mut seen = std::collections::HashSet::new();
         peers.retain(|address| seen.insert(*address));
+        // Show the discovered swarm as soon as it is known, not only once a
+        // worker happens to be talking to one of its members.
+        for address in peers.iter() {
+            self.progress.track_peer(*address);
+        }
         if peers.is_empty() && self.torrent.trackers.is_empty() && !errors.is_empty() {
             return Err(Error::Tracker(errors.join("; ")));
         }
@@ -396,18 +448,24 @@ impl Shared {
             };
 
             self.progress.active_peers.fetch_add(1, Ordering::Relaxed);
+            self.progress.mark_peer(address, "connecting");
             let result = self.fetch_piece(address, piece);
             self.progress.active_peers.fetch_sub(1, Ordering::Relaxed);
 
             match result {
-                Ok(data) => match self.commit(piece, &data) {
-                    Ok(()) => {}
-                    Err(err) => {
-                        eprintln!("piece {piece} rejected: {err}");
-                        self.missing.lock().unwrap().push_back(piece);
+                Ok(data) => {
+                    self.progress.add_peer_bytes(address, data.len() as u64);
+                    self.progress.mark_peer(address, "idle");
+                    match self.commit(piece, &data) {
+                        Ok(()) => {}
+                        Err(err) => {
+                            eprintln!("piece {piece} rejected: {err}");
+                            self.missing.lock().unwrap().push_back(piece);
+                        }
                     }
-                },
+                }
                 Err(err) => {
+                    self.progress.mark_peer(address, "failed");
                     eprintln!("peer {address} failed on piece {piece}: {err}");
                     self.missing.lock().unwrap().push_front(piece);
                 }

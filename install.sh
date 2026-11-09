@@ -103,7 +103,7 @@ version=$("$prefix/ftc" --version 2>/dev/null | awk '{print $2}')
 
 if [ "$OS" = Darwin ]; then
   apps="${FTC_APPS_DIR:-$HOME/Applications}"
-  app="$apps/ftc.app"
+  app="$apps/Footorrent.app"
   mkdir -p "$apps"
   # The real app bundle: a WKWebView window compiled in CI, so double-clicking
   # gives a window rather than a browser tab.
@@ -127,8 +127,8 @@ LAUNCHER
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <key>CFBundleName</key><string>ftc</string>
-    <key>CFBundleDisplayName</key><string>ftc</string>
+    <key>CFBundleName</key><string>Footorrent</string>
+    <key>CFBundleDisplayName</key><string>Footorrent</string>
     <key>CFBundleIdentifier</key><string>dev.ftc.webui</string>
     <key>CFBundleExecutable</key><string>ftc</string>
     <key>CFBundlePackageType</key><string>APPL</string>

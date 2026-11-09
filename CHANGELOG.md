@@ -5,6 +5,34 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.5.0] - 2026-11-09
+
+### Added
+
+- **Two-step magnet add.** Pasting a magnet and pressing Add now contacts the
+  swarm, verifies the metadata, and reports the name, exact byte size, piece
+  count and files found *before* anything is written. A second step asks where
+  the download should go, then starts it. `POST /api/resolve` returns the facts
+  and a token; `POST /api/start` takes the token plus the folder.
+- **Live peer connections.** Every job carries its discovered peers with a
+  state (`idle`, `connecting`, `failed`) and the bytes that peer delivered, in
+  `peer_list` on `/api/state` and in the details pane.
+- **Brand: Footorrent.** Mark, wordmark, palette and voice in `BRAND.md` and
+  `assets/brand/`; the window, page title, favicon and app bundle now use them.
+
+### Fixed
+
+- **macOS app quit itself 15 s after opening.** The startup watchdog checked a
+  log buffer that had already been cleared when the URL arrived, so it always
+  concluded the server had failed. It now records that the page loaded and only
+  reports a real failure.
+- **Magnets with dead trackers never resolved.** The DHT was only consulted when
+  a magnet had no trackers at all; now it is asked whenever the announce list
+  yields no peers, and it retries on a free port if 6881 is taken. Announces now
+  stop after 8 s each (20 s for the whole list) and every peer exchange may use
+  at most 15 s of the 120 s metadata budget, so a dead swarm fails with a clear
+  error instead of leaving the add dialog spinning forever.
+
 ## [3.4.1] - 2026-11-09
 
 ### Changed

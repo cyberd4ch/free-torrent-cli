@@ -1,4 +1,4 @@
-// ftc — a native window for the local web UI.
+// Footorrent — a native window for the local web UI.
 //
 // This is the "double-click and get an app" path on macOS. It is deliberately
 // thin: it starts `ftc serve` on a free loopback port, reads the URL the server
@@ -7,7 +7,7 @@
 // binary, so there is no second implementation of anything.
 //
 // Compiled by install.sh (or the release workflow) into:
-//   ftc.app/Contents/MacOS/ftc-gui
+//   Footorrent.app/Contents/MacOS/ftc-gui
 // with `ftc` copied alongside it.
 import AppKit
 import WebKit
@@ -18,6 +18,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var webView: WKWebView!
     private var server: Process?
     private var output = ""
+    /// Set once the server's URL has reached the web view. The startup watchdog
+    /// must consult this, not `output`: the URL line used to be removed from
+    /// `output` as soon as it was read, so the 15 s check always failed and quit
+    /// a perfectly healthy app.
+    private var loaded = false
     private var signalSources: [DispatchSourceSignal] = []
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -31,7 +36,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             backing: .buffered,
             defer: false
         )
-        window.title = "ftc"
+        window.title = "Footorrent"
         window.minSize = NSSize(width: 720, height: 480)
         window.center()
 
@@ -92,13 +97,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let appMenu = NSMenu()
         appMenu.addItem(
-            withTitle: "About ftc",
+            withTitle: "About Footorrent",
             action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)),
             keyEquivalent: ""
         )
         appMenu.addItem(.separator())
         appMenu.addItem(
-            withTitle: "Quit ftc",
+            withTitle: "Quit Footorrent",
             action: #selector(NSApplication.terminate(_:)),
             keyEquivalent: "q"
         )
@@ -155,8 +160,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             let data = handle.availableData
             guard let self, !data.isEmpty, let text = String(data: data, encoding: .utf8) else { return }
             self.output += text
-            if let url = self.firstURL(in: self.output) {
-                self.output = ""
+            // Keep enough of the log for a useful error, but not an unbounded buffer.
+            if self.output.count > 8000 {
+                self.output = String(self.output.suffix(4000))
+            }
+            if !self.loaded, let url = self.firstURL(in: self.output) {
+                self.loaded = true
                 DispatchQueue.main.async {
                     self.webView.load(URLRequest(url: url))
                 }
@@ -170,13 +179,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
 
-        // A server that dies or never prints a URL must not leave a blank window.
+        // A server that fails before the page loads shows its own log instead of
+        // leaving a blank window. Once the page is loaded this is a no-op.
+        process.terminationHandler = { [weak self] finished in
+            guard let self, !self.loaded else { return }
+            self.showError("The Footorrent server exited with status \(finished.terminationStatus).\n\n\(self.output)")
+        }
         DispatchQueue.main.asyncAfter(deadline: .now() + 15) { [weak self] in
-            guard let self, let url = self.firstURL(in: self.output) else {
-                self?.showError("The ftc server did not start.\n\n\(self?.output ?? "")")
-                return
-            }
-            _ = url
+            guard let self, !self.loaded else { return }
+            self.showError("The Footorrent server did not start.\n\n\(self.output)")
         }
     }
 
@@ -191,7 +202,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func showError(_ message: String) {
         DispatchQueue.main.async {
             let alert = NSAlert()
-            alert.messageText = "ftc could not start"
+            alert.messageText = "Footorrent could not start"
             alert.informativeText = message
             alert.alertStyle = .warning
             alert.addButton(withTitle: "Quit")

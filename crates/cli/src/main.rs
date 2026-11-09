@@ -11,7 +11,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 const USAGE: &str = "\
-free-torrent-cli — a BitTorrent client in Rust
+Footorrent — a BitTorrent client in Rust (command: ftc)
 
 USAGE:
     ftc <file.torrent | magnet:?xt=urn:btih:...> [options]
@@ -80,7 +80,7 @@ fn run() -> Result<(), String> {
                 return Ok(());
             }
             "-V" | "--version" => {
-                println!("free-torrent-cli {}", env!("CARGO_PKG_VERSION"));
+                println!("Footorrent {} (ftc)", env!("CARGO_PKG_VERSION"));
                 return Ok(());
             }
             "-o" | "--output" => {
