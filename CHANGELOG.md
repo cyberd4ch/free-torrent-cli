@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.4.1] - 2026-11-09
+
+### Changed
+- **The published-archive smoke test now looks at the 3.4.0 surface.** It asserts
+  the drop zone and `POST /api/add-torrent`, then sends a base64 upload in the exact
+  shape the page sends and checks the worker turned it into a job. An archive from
+  before 3.4.0 answers `404` there, so a stale build can no longer pass.
+- **The smoke test runs when the release finishes.** A release published with
+  `GITHUB_TOKEN` does not cascade into `release`-triggered workflows, so the job
+  hangs off `workflow_run` completion of `release` instead.
+
 ## [3.4.0] - 2026-11-08
 
 ### Added

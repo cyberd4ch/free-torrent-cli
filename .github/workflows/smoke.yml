@@ -134,6 +134,25 @@ jobs:
           curl -fsS "$url/api/state" | python3 -c \
             "import json,sys; d=json.load(sys.stdin); assert d['jobs'] and d['jobs'][0]['status']=='error', d; print('error path ok:', d['jobs'][0]['error'][:60])"
 
+          # A .torrent dropped on the page, in the exact shape the browser sends:
+          # base64 in the form body. An archive from before 3.4.0 answers 404 here,
+          # so this is what stops a stale build from looking green.
+          grep -q 'id="dropzone"' page.html
+          grep -q '/api/add-torrent' page.html
+          curl -fsS -X POST --data-urlencode 'name=notes.torrent' --data-urlencode 'data=aGVsbG8=' \
+            "$url/api/add-torrent" -o drop.json
+          sleep 1
+          curl -fsS "$url/api/state" -o after-drop.json
+          python3 - <<'PY'
+          import json
+          drop = json.load(open("drop.json"))
+          state = json.load(open("after-drop.json"))
+          job = next((j for j in state["jobs"] if j["id"] == drop["id"]), None)
+          assert job, (drop, state)
+          assert job["status"] == "error", job
+          print("drop path ok: job", job["id"], "->", job["error"][:50])
+          PY
+
           if [ "${binary##*.}" = "exe" ]; then
             taskkill //F //PID "$server" >/dev/null 2>&1 || true
           else
