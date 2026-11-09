@@ -19,30 +19,47 @@ peers in the swarm, the arrow is the transfer. It reads at 16 px in a tab and at
 
 ## Palette
 
+Warm paper, ink and one blue. These are the values in `crates/cli/src/ui.html`,
+the page the macOS app puts in its window; everything else follows from them.
+
 | Token | Hex | Use |
 | --- | --- | --- |
-| Ink | `#111318` | primary background |
-| Graphite | `#1B1E26` | panels, cards |
-| Slate | `#2A2F3A` | borders, dividers |
-| Paper | `#F5F3EF` | text on dark, print background |
-| Muted | `#8B93A1` | secondary text |
-| Ember | `#FF7A2F` | the mark, primary action, one accent per screen |
-| Ember Light | `#FFB27A` | hover, gradient top stop |
-| Mint | `#3DDC97` | completed, connected |
-| Amber | `#E6C36A` | paused, warning |
-| Signal Red | `#FF5D5D` | failed only |
+| `--bg` | `#F7F2E8` | window and page background |
+| `--panel` | `#FBF7EE` | title bar, cards, dialogs, table header |
+| `--panel-2` | `#F0E9DB` | buttons, chips, secondary fills |
+| `--panel-3` | `#E8DFCE` | hover state for those controls |
+| `--field` | `#FFFDF7` | inputs and table body (set inline in the window) |
+| `--line` | `#E3D9C6` | hairlines, card and table borders |
+| `--line-2` | `#D2C5AE` | borders that have to hold a shape |
+| `--text` | `#1C2A3A` | primary text, headings, numbers |
+| `--muted` | `#5B6B7D` | body and secondary text |
+| `--dim` | `#8492A0` | labels, placeholders, timestamps |
+| `--accent` | `#2F6FA8` | the mark, links, labels, the primary action |
+| `--accent-2` | `#5B93C7` | top stop of the button and progress gradients |
+| `--ok` | `#2E7D5B` | completed, connected |
+| `--warn` | `#A5741C` | paused, warning |
+| `--err` | `#B4473F` | failed, and nothing else |
+| `--info` | `#3C74A8` | peer and metadata messages |
 
-Ember on Ink is the signature pairing. Never place Ember text on Paper at body
-size — it fails contrast; use Ink on Ember or Ember as a fill only.
+Blue on paper is the signature pairing. One accent element per view — the Add
+Download button — everything else is neutral so status colours stay meaningful:
+if the window is red, something failed. `--dim` is for labels and placeholders,
+never for body copy; body text is `--muted` or `--text`.
+
+Depth is drawn with hairlines, not shadows. A panel is `--panel` plus a 1 px
+`--line` border; shadows appear only under things that float (dialogs, the
+terminal and screenshot frames on the site).
 
 ## Type
 
 System stacks only, because the app ships no fonts: `-apple-system,
-BlinkMacSystemFont, "Segoe UI", Inter, system-ui, sans-serif`.
+BlinkMacSystemFont, "Segoe UI", Inter, system-ui, sans-serif`. Code and
+numerals in tables use `ui-monospace, SFMono-Regular, Menlo, monospace`.
 
 - Wordmark: lowercase `footorrent`, weight 650, tracking `-0.02em`. `foot` is
-  Ember, `orrent` is Paper.
-- Headings: 600, tracking `-0.01em`.
+  `--accent`, `orrent` is `--text`. The title bar appends `Download Manager` in
+  `--dim`.
+- Headings: 600, tracking `-0.01em` (display sizes up to `-0.035em`).
 - Body: 400 at 13–15 px, line height 1.45.
 - Numerals are tabular in the download table so sizes and speeds line up.
 
@@ -56,10 +73,17 @@ Files in `assets/brand/`:
 | `footorrent-lockup.svg` | mark + wordmark, horizontal |
 | `icon-1024.svg` | macOS / store icon source |
 
+In the window the mark is drawn in `--accent` inside a 26 px `#F1E9DA` tile with
+a `--line-2` border, sitting beside the wordmark.
+
 Clear space is half a toe radius on all sides. Minimum tile size is 16 px; below
 that, drop the carved arrow and keep the footprint silhouette. Do not rotate,
 recolor outside the palette, add a gradient to the mark, or place the lockup on
 a photograph.
+
+The three SVG files above still carry an earlier ember-on-ink treatment
+(`#FF7A2F` on `#14161C`) and predate this palette; redrawing them in paper and
+blue is outstanding.
 
 ## Voice
 
@@ -73,6 +97,13 @@ in code, paths and commands.
 
 ## UI tokens
 
-The page uses the palette above directly: `--bg: #0b0c0f`, `--panel: #0f1115`,
-`--accent: #ff7a2f`, `--ok: #3ddc84`. One Ember element per view — the Add
-Download button — everything else is neutral so status colors stay meaningful.
+The palette above is the interface contract. `crates/cli/src/ui.html`,
+`docs/index.html` and `docs/release-3.5.0.html` share one `:root` block: the
+window's variables as declared, plus `--field` for the fill it sets inline.
+Change a value in the window first, then copy it out.
+
+Controls are 32 px high with 8 px radii, chips are pills at 999 px, panels and
+dialogs use 10–12 px radii, and the primary button is a `--accent-2` →
+`--accent` vertical gradient with a `#245A8A` border. Progress bars use the same
+gradient; completed is `--ok`, paused is `--warn`, stopped and failed stay
+neutral and `--err`.

@@ -10,10 +10,7 @@
     <meta property="og:description"
         content="Three wire bugs, a dead-tracker fallback and a download step that finally uses the peers resolve discovered." />
     <title>Footorrent 3.5.0 — magnets that actually work</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link
-        href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=Fira+Code:wght@300;400;500&display=swap"
-        rel="stylesheet" />
+    <meta name="theme-color" content="#f7f2e8" />
     <style>
         *,
         *::before,
@@ -23,31 +20,43 @@
             padding: 0;
         }
 
+        /* ── Tokens ───────────────────────────────────────────────────────────────
+           Taken from the download manager window (crates/cli/src/ui.html), the page
+           the macOS app shows in its WKWebView. Change them there first. */
         :root {
-            --black: #07070d;
-            --card: #12121d;
-            --border: #1d1d2e;
-            --border2: #2b2b42;
-            --cyan: #00e5ff;
-            --purple: #b088f9;
-            --green: #00ff88;
-            --white: #f1f1fa;
-            --dim: #85859c;
-            --mono: 'Fira Code', ui-monospace, monospace;
-            --display: 'Syne', system-ui, sans-serif;
+            --bg: #f7f2e8;
+            --panel: #fbf7ee;
+            --panel-2: #f0e9db;
+            --panel-3: #e8dfce;
+            --field: #fffdf7;
+            --line: #e3d9c6;
+            --line-2: #d2c5ae;
+            --text: #1c2a3a;
+            --muted: #5b6b7d;
+            --dim: #8492a0;
+            --accent: #2f6fa8;
+            --accent-2: #5b93c7;
+            --ok: #2e7d5b;
+            --warn: #a5741c;
+            --err: #b4473f;
+            --info: #3c74a8;
+            --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, system-ui, sans-serif;
+            --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
         }
 
         body {
-            background: var(--black);
-            color: var(--white);
-            font-family: var(--display);
+            background: var(--bg);
+            color: var(--text);
+            font-family: var(--sans);
+            font-size: 16px;
             line-height: 1.7;
             -webkit-font-smoothing: antialiased;
         }
 
         a {
-            color: var(--cyan);
+            color: var(--accent);
             text-decoration: none;
+            text-underline-offset: 2px;
         }
 
         a:hover {
@@ -56,8 +65,11 @@
 
         code {
             font-family: var(--mono);
-            font-size: .9em;
-            color: var(--purple);
+            font-size: .88em;
+            color: #2a5f8f;
+            background: var(--panel-2);
+            border-radius: 4px;
+            padding: 1px 5px;
         }
 
         .wrap {
@@ -67,72 +79,99 @@
         }
 
         .back {
+            display: inline-flex;
+            align-items: center;
+            padding: 5px 11px;
+            border: 1px solid var(--line-2);
+            border-radius: 999px;
+            background: var(--panel-2);
             font-family: var(--mono);
-            font-size: 12px;
-            color: var(--dim);
-            letter-spacing: .04em;
+            font-size: 11px;
+            letter-spacing: .05em;
+            text-transform: uppercase;
+            color: var(--muted);
+            transition: background .2s, border-color .2s, color .2s;
+        }
+
+        .back:hover {
+            background: var(--panel-3);
+            border-color: #a9bfd4;
+            color: var(--text);
+            text-decoration: none;
         }
 
         .kicker {
-            margin-top: 48px;
+            margin-top: 44px;
             font-family: var(--mono);
-            font-size: 12px;
-            letter-spacing: .08em;
+            font-size: 11px;
+            letter-spacing: .1em;
             text-transform: uppercase;
-            color: var(--cyan);
+            color: var(--accent);
         }
 
         h1 {
             font-size: clamp(34px, 6vw, 54px);
+            font-weight: 600;
             line-height: 1.04;
             letter-spacing: -.035em;
+            color: var(--text);
             margin: 14px 0 18px;
         }
 
         .lede {
             font-size: 18px;
-            color: var(--dim);
+            line-height: 1.65;
+            color: var(--muted);
             margin-bottom: 18px;
         }
 
         .meta {
             font-family: var(--mono);
-            font-size: 12px;
+            font-size: 11.5px;
             color: var(--dim);
-            padding-bottom: 30px;
-            border-bottom: 1px solid var(--border);
+            padding-bottom: 28px;
+            border-bottom: 1px solid var(--line);
         }
 
         h2 {
             font-size: 24px;
+            font-weight: 600;
             letter-spacing: -.02em;
+            color: var(--text);
             margin: 46px 0 14px;
         }
 
         h3 {
             font-size: 17px;
+            font-weight: 600;
+            color: var(--text);
             margin: 28px 0 8px;
         }
 
         p {
             margin: 0 0 16px;
-            color: #cfd0dc;
+            color: var(--muted);
         }
 
         ul,
         ol {
             margin: 0 0 18px 20px;
-            color: #cfd0dc;
+            color: var(--muted);
         }
 
         li {
             margin-bottom: 8px;
         }
 
+        strong {
+            color: var(--text);
+            font-weight: 650;
+        }
+
         .callout {
-            background: var(--card);
-            border: 1px solid var(--border2);
-            border-left: 3px solid var(--cyan);
+            background: var(--panel);
+            border: 1px solid var(--line);
+            border-left: 3px solid var(--accent);
             border-radius: 10px;
             padding: 18px 20px;
             margin: 22px 0;
@@ -150,9 +189,9 @@
         }
 
         .number {
-            background: var(--card);
-            border: 1px solid var(--border);
-            border-radius: 10px;
+            background: var(--panel);
+            border: 1px solid var(--line);
+            border-radius: 12px;
             padding: 14px 16px;
         }
 
@@ -160,13 +199,13 @@
             display: block;
             font-family: var(--mono);
             font-size: 20px;
-            color: var(--green);
             font-weight: 500;
+            color: var(--accent);
         }
 
         .number span {
             font-family: var(--mono);
-            font-size: 11px;
+            font-size: 10.5px;
             color: var(--dim);
             letter-spacing: .04em;
         }
@@ -174,9 +213,9 @@
         footer {
             margin-top: 56px;
             padding-top: 22px;
-            border-top: 1px solid var(--border);
+            border-top: 1px solid var(--line);
             font-family: var(--mono);
-            font-size: 12px;
+            font-size: 11.5px;
             color: var(--dim);
         }
     </style>
