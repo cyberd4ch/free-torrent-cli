@@ -926,7 +926,7 @@
             pause: (job) => job.status === "downloading",
             resume: (job) => job.status === "paused",
             cancel: (job) => ["metadata", "paused", "downloading"].includes(job.status),
-            retry: (job) => ["error", "cancelled"].includes(job.status),
+            retry: (job) => ["error", "cancelled", "paused"].includes(job.status),
             remove: (job) => ["done", "error", "cancelled"].includes(job.status),
         };
 

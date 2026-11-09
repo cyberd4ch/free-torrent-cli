@@ -71,6 +71,8 @@ struct Job {
 /// not confirmed yet. Nothing is written to disk until `/api/start` runs.
 struct Pending {
     token: u64,
+    /// The original magnet, kept so Retry can re-add the job after a stop.
+    target: String,
     torrent: Torrent,
     /// Peers the metadata exchange already reached. Handing them to the
     /// session matters when the magnet's own trackers are dead: re-announcing
@@ -482,9 +484,18 @@ fn remove(state: &Arc<State>, body: &str) -> (u16, &'static str, Vec<u8>) {
         }
     }
 
+    let dropped: Vec<String> = jobs
+        .iter()
+        .filter(|job| scope.covers(job.id) && is_terminal(job.status))
+        .map(|job| job.target.clone())
+        .collect();
     let before = jobs.len();
     jobs.retain(|job| !(scope.covers(job.id) && is_terminal(job.status)));
     let removed = before - jobs.len();
+    // Uploads live until their job is removed; Retry needs the file to still exist.
+    for target in dropped {
+        remove_upload(&target);
+    }
     if scope.is_strict() && removed == 0 {
         return bad("only stopped or finished downloads can be removed");
     }
@@ -499,12 +510,24 @@ fn retry(state: &Arc<State>, body: &str) -> (u16, &'static str, Vec<u8>) {
     };
 
     let (target, output, limit) = {
-        let jobs = state.jobs.lock().unwrap();
-        let Some(job) = jobs.iter().find(|job| job.id == id) else {
+        let mut jobs = state.jobs.lock().unwrap();
+        let Some(job) = jobs.iter_mut().find(|job| job.id == id) else {
             return (404, "text/plain; charset=utf-8", b"no such job".to_vec());
         };
+        // A paused job has not failed: Retry is the natural resume, and doing it
+        // in place avoids a second job racing over the same files.
+        if job.status == "paused" {
+            if let Some(flag) = &job.pause {
+                flag.store(false, Ordering::Relaxed);
+            }
+            job.status = "downloading";
+            return json(
+                200,
+                format!("{{\"id\":{id},\"affected\":1,\"resumed\":true}}"),
+            );
+        }
         if !is_terminal(job.status) {
-            return bad("only stopped or failed downloads can be retried");
+            return bad("only paused, stopped or failed downloads can be retried");
         }
         (job.target.clone(), job.output.clone(), job.limit)
     };
@@ -685,8 +708,8 @@ fn spawn_download(
 ) {
     std::thread::spawn(move || {
         let resolved = resolve(&target, &state.options);
-        // An uploaded .torrent only had to survive until it was parsed.
-        remove_upload(&target);
+        // Keep an uploaded .torrent around: Retry re-parses the same path, and
+        // deleting it here made every retry of an upload fail with "cannot read".
         let torrent = match resolved {
             Ok(torrent) => torrent,
             Err(message) => return finish(&state, id, "error", Some(message)),
@@ -759,6 +782,7 @@ fn resolve_target(state: &Arc<State>, body: &str) -> (u16, &'static str, Vec<u8>
     );
     state.pending.lock().unwrap().push(Pending {
         token,
+        target: target.clone(),
         torrent,
         peers,
     });
@@ -820,10 +844,11 @@ fn start_pending(state: &Arc<State>, body: &str) -> (u16, &'static str, Vec<u8>)
 
     let id = state.next_id.fetch_add(1, Ordering::Relaxed);
     let name = pending.torrent.name.clone();
+    let source = pending.target.clone();
     let total = pending.torrent.total_length;
     state.jobs.lock().unwrap().push(Job {
         id,
-        target: name.clone(),
+        target: source,
         name,
         output: output.clone(),
         status: if paused { "paused" } else { "metadata" },
@@ -1226,6 +1251,57 @@ mod tests {
                 .send_string("id=404");
             assert_eq!(unknown.unwrap_err().into_response().unwrap().status(), 404);
         }
+    }
+
+    #[test]
+    fn retry_on_a_paused_job_resumes_it_in_place() {
+        let (addr, state) = server();
+        let pause = stub(&state, 1, "paused");
+        let body = post(addr, "/api/retry", "id=1").into_string().unwrap();
+        assert!(body.contains("\"resumed\":true"), "body was {body}");
+        assert!(
+            !pause.load(Ordering::Relaxed),
+            "retry should clear the pause flag"
+        );
+        let after = state_body(addr);
+        assert!(
+            after.contains("\"status\":\"downloading\""),
+            "state was {after}"
+        );
+        assert_eq!(
+            after.matches("\"id\":1").count(),
+            1,
+            "no duplicate job: {after}"
+        );
+    }
+
+    #[test]
+    fn retry_keeps_the_magnet_for_a_stopped_job() {
+        let (addr, state) = server();
+        state.jobs.lock().unwrap().push(Job {
+            id: 7,
+            // An invalid hash fails fast, so the test never touches the network.
+            target: "magnet:?xt=urn:btih:not-a-hash".to_string(),
+            name: "example".to_string(),
+            output: PathBuf::from("/tmp"),
+            status: "cancelled",
+            total: 0,
+            limit: None,
+            added: 1,
+            finished: Some(2),
+            progress: None,
+            stop: None,
+            pause: None,
+            error: Some("stopped".to_string()),
+        });
+        let body = post(addr, "/api/retry", "id=7").into_string().unwrap();
+        assert!(body.starts_with("{\"id\":"), "body was {body}");
+        let after = state_body(addr);
+        assert!(
+            after.contains("\"target\":\"magnet:?xt=urn:btih:not-a-hash\""),
+            "retry must re-add the magnet, state was {after}"
+        );
+        assert!(!after.contains("cannot read example"), "state was {after}");
     }
 
     #[test]

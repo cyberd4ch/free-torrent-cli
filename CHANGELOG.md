@@ -65,6 +65,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   message, so a dead-swarm report could not be looked up. Resolve failures now
   include the full 40-character infohash before the peer errors, and the dialog
   offers a Copy infohash button when one is present.
+- **Retry forgot the magnet.** `/api/start` stored the display name as the job's
+  source, so retrying a stopped magnet tried to read a file called "Sintel"
+  instead of re-adding the magnet. The job now keeps the original magnet, Retry
+  on a paused job resumes it in place, and uploaded `.torrent` files survive
+  until their job is removed so retrying an upload can re-parse them.
 - **Healthy peers were rejected during metadata exchange.** A peer that sent a
   bitfield or an unchoke before its extension handshake was treated as not
   supporting `ut_metadata`, so magnets failed against ordinary clients even
