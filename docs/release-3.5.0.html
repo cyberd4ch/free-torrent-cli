@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description"
+        content="Footorrent 3.5.0: magnets now fetch and verify metadata before writing anything, survive dead trackers, and stop discarding the peers they just found." />
+    <meta property="og:title" content="Footorrent 3.5.0 — magnets that actually work" />
+    <meta property="og:description"
+        content="Three wire bugs, a dead-tracker fallback and a download step that finally uses the peers resolve discovered." />
+    <title>Footorrent 3.5.0 — magnets that actually work</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link
+        href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=Fira+Code:wght@300;400;500&display=swap"
+        rel="stylesheet" />
+    <style>
+        *,
+        *::before,
+        *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        :root {
+            --black: #07070d;
+            --card: #12121d;
+            --border: #1d1d2e;
+            --border2: #2b2b42;
+            --cyan: #00e5ff;
+            --purple: #b088f9;
+            --green: #00ff88;
+            --white: #f1f1fa;
+            --dim: #85859c;
+            --mono: 'Fira Code', ui-monospace, monospace;
+            --display: 'Syne', system-ui, sans-serif;
+        }
+
+        body {
+            background: var(--black);
+            color: var(--white);
+            font-family: var(--display);
+            line-height: 1.7;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        a {
+            color: var(--cyan);
+            text-decoration: none;
+        }
+
+        a:hover {
+            text-decoration: underline;
+        }
+
+        code {
+            font-family: var(--mono);
+            font-size: .9em;
+            color: var(--purple);
+        }
+
+        .wrap {
+            max-width: 780px;
+            margin: 0 auto;
+            padding: 64px 24px 96px;
+        }
+
+        .back {
+            font-family: var(--mono);
+            font-size: 12px;
+            color: var(--dim);
+            letter-spacing: .04em;
+        }
+
+        .kicker {
+            margin-top: 48px;
+            font-family: var(--mono);
+            font-size: 12px;
+            letter-spacing: .08em;
+            text-transform: uppercase;
+            color: var(--cyan);
+        }
+
+        h1 {
+            font-size: clamp(34px, 6vw, 54px);
+            line-height: 1.04;
+            letter-spacing: -.035em;
+            margin: 14px 0 18px;
+        }
+
+        .lede {
+            font-size: 18px;
+            color: var(--dim);
+            margin-bottom: 18px;
+        }
+
+        .meta {
+            font-family: var(--mono);
+            font-size: 12px;
+            color: var(--dim);
+            padding-bottom: 30px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        h2 {
+            font-size: 24px;
+            letter-spacing: -.02em;
+            margin: 46px 0 14px;
+        }
+
+        h3 {
+            font-size: 17px;
+            margin: 28px 0 8px;
+        }
+
+        p {
+            margin: 0 0 16px;
+            color: #cfd0dc;
+        }
+
+        ul,
+        ol {
+            margin: 0 0 18px 20px;
+            color: #cfd0dc;
+        }
+
+        li {
+            margin-bottom: 8px;
+        }
+
+        .callout {
+            background: var(--card);
+            border: 1px solid var(--border2);
+            border-left: 3px solid var(--cyan);
+            border-radius: 10px;
+            padding: 18px 20px;
+            margin: 22px 0;
+        }
+
+        .callout p:last-child {
+            margin-bottom: 0;
+        }
+
+        .numbers {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 12px;
+            margin: 24px 0;
+        }
+
+        .number {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 14px 16px;
+        }
+
+        .number b {
+            display: block;
+            font-family: var(--mono);
+            font-size: 20px;
+            color: var(--green);
+            font-weight: 500;
+        }
+
+        .number span {
+            font-family: var(--mono);
+            font-size: 11px;
+            color: var(--dim);
+            letter-spacing: .04em;
+        }
+
+        footer {
+            margin-top: 56px;
+            padding-top: 22px;
+            border-top: 1px solid var(--border);
+            font-family: var(--mono);
+            font-size: 12px;
+            color: var(--dim);
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="./index.html">← footorrent</a>
+
+        <p class="kicker">Release 3.5.0</p>
+        <h1>Magnets that actually work</h1>
+        <p class="lede">A magnet link is four lines of text that promises a file you cannot see yet. For a long
+            time, Footorrent treated that promise as enough: it announced, connected, and started writing before it
+            really knew what it was downloading. If anything on the wire went sideways, the window just said
+            “fetching metadata” until you gave up.</p>
+        <p class="meta">2026-11-09 · dach-a · Rust, no runtime · ~3 MB binary</p>
+
+        <h2>Metadata first, disk second</h2>
+        <p>Adding a magnet is now two deliberate steps. The first contacts the swarm, fetches the <code>info</code>
+            dictionary over BEP 9/10, hashes it against the magnet's info hash, and reports the real name, exact
+            byte size, piece count and file list. Nothing is created on disk. Only then does the window ask where
+            the download should go and start it.</p>
+        <p>That sounds like polish. It is really a correctness change: the size you approve is the size you get,
+            and a link that cannot produce verified metadata fails while the dialog is still open, instead of
+            leaving a half-named folder behind.</p>
+
+        <h2>Three bugs that made magnets look broken</h2>
+        <p>Most of this release was diagnosis. Each bug below was invisible from the outside — the client looked
+            busy, and every magnet “just failed”.</p>
+
+        <h3>1. The extension id was somebody else's</h3>
+        <p>BEP 10 has each side advertise the id the <em>other</em> must use. Our requests went out under the
+            peer's id (often 3), but replies come back under <em>our</em> advertised id (1). The receive loop
+            matched the wrong number and discarded every real metadata reply. Peers were healthy; we were reading
+            the wrong mailbox.</p>
+
+        <h3>2. Routine chatter was treated as rejection</h3>
+        <p>A peer that sent a bitfield or an unchoke before its extension handshake was counted as not supporting
+            <code>ut_metadata</code>. Ordinary clients do this constantly, so magnets failed against perfectly good
+            peers. Both the metadata and download loops now ignore that chatter, and our handshake sets the
+            extension bit so peers actually answer.</p>
+
+        <h3>3. The peers we found were thrown away</h3>
+        <p>The worst one. Resolving a magnet discovered 211 peers — and then <code>/api/start</code> dropped
+            them, re-announced to the magnet's own tracker list, and waited. When that list was dead, the job sat
+            at zero peers and zero bytes forever. The peers from resolve are now handed straight to the session
+            that starts the download.</p>
+
+        <h2>When the announce list is dead</h2>
+        <p>Old magnets carry tracker lists that rot: one returns 403, one is a UDP host that never answers, one
+            is an I2P name that will not resolve. Asking them in sequence let the first failure eat the whole
+            budget, so later trackers never got a turn.</p>
+        <ul>
+            <li>Announces now go out in parallel — 8 s each, 20 s overall.</li>
+            <li>If the whole list yields nothing, well-known public trackers are tried before the DHT.</li>
+            <li>The DHT gets a second hunt if its first answer is thin, and metadata exchanges run in parallel
+                batches of eight in shuffled order.</li>
+            <li>Failures say how many peers were tried and what the last one said, instead of one misleading
+                tracker error.</li>
+        </ul>
+        <p>The result is visible in the window: the confirmation step says when a magnet's own announce list did
+            not answer and public trackers were used, every peer row shows its live rate, and a failed resolve
+            keeps the links in place behind a <strong>Retry</strong> button.</p>
+
+        <div class="callout">
+            <p><strong>Measured, not asserted.</strong> A Sintel magnet carrying a deliberately dead announce list
+                (403 + two silent UDP trackers + an unresolvable I2P host) resolved in 17–42 s, reporting
+                129,302,391 bytes, 987 pieces, 11 files and 207–211 peers. Starting it wrote 917,504 bytes in the
+                first minute at 15–26 KB/s across 6 peers.</p>
+        </div>
+
+        <div class="numbers">
+            <div class="number"><b>17 s</b><span>resolve, dead trackers</span></div>
+            <div class="number"><b>129,302,391</b><span>bytes reported before writing</span></div>
+            <div class="number"><b>6</b><span>active peers</span></div>
+            <div class="number"><b>~3 MB</b><span>single binary</span></div>
+        </div>
+
+        <h2>What this release does not fix</h2>
+        <p>A dead swarm is still dead. If every peer in the DHT and every tracker refuses the connection, the
+            client cannot invent a source — it can only be honest about it. That is the point of the new error
+            text: “tried 27 of 27 peer(s): connection refused” tells you the swarm is gone, not that the client is
+            confused.</p>
+        <p>One magnet from a report is still unresolved for a simpler reason: its hash arrived truncated, so there
+            was nothing to query. If you hit a failure, paste the full 40-character info hash and the tracker list
+            — that is enough to tell a dead swarm apart from a client bug.</p>
+
+        <h2>Upgrade</h2>
+        <p>Prebuilt binaries for macOS, Linux and Windows are on the
+            <a href="https://github.com/cyberd4ch/free-torrent-cli/releases">releases page</a>; the CLI, web UI and
+            macOS window all come from the same <code>ftc</code> binary. The full list of changes is in the
+            <a href="https://github.com/cyberd4ch/free-torrent-cli/blob/main/CHANGELOG.md">changelog</a>.</p>
+        <p>Commits behind this post: <code>2fc6640</code> (parallel announces, public fallback, batched metadata),
+            <code>46edeb8</code> (hand resolved peers to the download) and <code>9f4197c</code> (tracker fallback,
+            per-peer rates, retry).</p>
+
+        <footer>
+            Footorrent — small footprint, big downloads. Written in Rust; no libtorrent, no Electron, no telemetry.
+        </footer>
+    </div>
+</body>
+
+</html>
