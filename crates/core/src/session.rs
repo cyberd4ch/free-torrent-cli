@@ -20,6 +20,13 @@ const DHT_HUNT_WANT: usize = 16;
 /// Waiting time per DHT refill inside a tracker cycle.
 const DHT_REFILL: Duration = Duration::from_secs(6);
 
+/// How long a worker with an empty address queue keeps faith with the swarm
+/// before handing its slot back (run()'s attempt cycle then re-announces).
+const PEER_WAIT: Duration = Duration::from_secs(6);
+/// Minimum gap between announce bursts that starved workers fire themselves,
+/// so a pack of peers waiting for addresses cannot stampede the tracker.
+const PEER_REFILL_GAP: Duration = Duration::from_millis(2500);
+
 #[derive(Debug, Clone)]
 pub struct Options {
     pub max_peers: usize,
@@ -187,6 +194,7 @@ pub struct Session {
     stop: Arc<AtomicBool>,
     pause: Arc<AtomicBool>,
     throttle: Option<Arc<Throttle>>,
+    explicit: Option<Arc<Vec<SocketAddr>>>,
 }
 
 impl Session {
@@ -234,6 +242,7 @@ impl Session {
             stop: Arc::new(AtomicBool::new(false)),
             pause: Arc::new(AtomicBool::new(false)),
             throttle,
+            explicit: None,
         };
         Ok((session, progress))
     }
@@ -270,9 +279,10 @@ impl Session {
     pub fn run(mut self, explicit_peers: Option<Vec<SocketAddr>>) -> Result<Stats> {
         let started = Instant::now();
         let mut attempts = 0;
+        let explicit = explicit_peers.map(Arc::new);
         // Unless the caller handed over peers by hand, join the DHT so that
         // discovery does not rely on trackers alone.
-        if explicit_peers.is_none() && self.options.use_dht {
+        if explicit.is_none() && self.options.use_dht {
             match Dht::boot(dht::random_node_id(), self.options.port) {
                 Ok(node) => self.dht = Some(node),
                 Err(err) => eprintln!("DHT unavailable, trackers only: {err}"),
@@ -295,12 +305,13 @@ impl Session {
             }
             attempts += 1;
 
-            self.fill_peers(explicit_peers.as_deref(), attempts)?;
+            self.fill_peers(explicit.as_ref().map(|list| list.as_slice()), attempts)?;
             if self.peers.lock().unwrap().is_empty() {
                 std::thread::sleep(Duration::from_secs(5));
                 continue;
             }
 
+            self.explicit = explicit.clone();
             self.spawn_workers();
             if self.stop.load(Ordering::Relaxed) {
                 return Err(Error::Cancelled);
@@ -404,6 +415,12 @@ impl Session {
             stop: self.stop.clone(),
             pause: self.pause.clone(),
             throttle: self.throttle.clone(),
+            explicit: self.explicit.clone(),
+            last_refill: Arc::new(Mutex::new(
+                Instant::now()
+                    .checked_sub(PEER_REFILL_GAP)
+                    .unwrap_or_else(Instant::now),
+            )),
         }
     }
 }
@@ -419,6 +436,8 @@ struct Shared {
     stop: Arc<AtomicBool>,
     pause: Arc<AtomicBool>,
     throttle: Option<Arc<Throttle>>,
+    explicit: Option<Arc<Vec<SocketAddr>>>,
+    last_refill: Arc<Mutex<Instant>>,
 }
 
 impl Shared {
@@ -439,6 +458,10 @@ impl Shared {
     }
 
     fn worker_loop(&self) {
+        // One negotiated connection serves as many pieces as it stays alive;
+        // the worker only ends when the pool empties, a stop lands, or every
+        // candidate peer refused.
+        let mut link: Option<(SocketAddr, TcpStream, Option<Vec<u8>>)> = None;
         loop {
             if self.stop.load(Ordering::Relaxed) {
                 return;
@@ -455,25 +478,31 @@ impl Shared {
                 Some(piece) => piece,
                 None => return,
             };
-            let address = match self.peers.lock().unwrap().pop_front() {
-                Some(address) => address,
-                None => {
-                    self.missing.lock().unwrap().push_front(piece);
-                    return;
-                }
+            if link.is_none() {
+                link = match self.acquire_connection() {
+                    Some(link) => Some(link),
+                    None => {
+                        // The swarm went quiet and stayed quiet: hand the piece
+                        // back and let run()'s attempt cycle take over.
+                        self.missing.lock().unwrap().push_front(piece);
+                        return;
+                    }
+                };
+            }
+            let Some((address, stream, bits)) = link.as_mut() else {
+                return;
             };
-
             self.progress.active_peers.fetch_add(1, Ordering::Relaxed);
-            self.progress.mark_peer(address, "connecting");
-            let result = self.fetch_piece(address, piece);
+            let result = self.fetch_piece(stream, bits.as_deref(), piece);
             self.progress.active_peers.fetch_sub(1, Ordering::Relaxed);
 
             match result {
                 Ok(data) => {
-                    self.progress.add_peer_bytes(address, data.len() as u64);
-                    self.progress.mark_peer(address, "idle");
+                    self.progress.add_peer_bytes(*address, data.len() as u64);
+                    self.progress.mark_peer(*address, "idle");
                     match self.commit(piece, &data) {
                         Ok(()) => {}
+                        // Disk troubles: the piece, not the peer, waits.
                         Err(err) => {
                             eprintln!("piece {piece} rejected: {err}");
                             self.missing.lock().unwrap().push_back(piece);
@@ -481,40 +510,27 @@ impl Shared {
                     }
                 }
                 Err(err) => {
-                    self.progress.mark_peer(address, "failed");
+                    self.progress.mark_peer(*address, "failed");
                     eprintln!("peer {address} failed on piece {piece}: {err}");
+                    // Any failure - protocol, corrupt block, hangup - poisons
+                    // the connection: a fresh one opens for the next piece.
+                    link = None;
                     self.missing.lock().unwrap().push_front(piece);
                 }
             }
         }
     }
 
-    fn commit(&self, index: usize, data: &[u8]) -> Result<()> {
-        let mut hasher = Sha1::new();
-        hasher.update(data);
-        let digest = hasher.finalize();
-        if digest.as_slice() != self.torrent.pieces[index] {
-            return Err(Error::Peer(format!(
-                "piece {index} failed SHA-1 verification"
-            )));
-        }
-        self.storage
-            .write_piece(index, self.torrent.piece_length, data)?;
-        self.progress
-            .downloaded
-            .fetch_add(data.len() as u64, Ordering::Relaxed);
-        self.progress.verified.fetch_add(1, Ordering::Relaxed);
-        let snapshot = self.progress.snapshot();
-        if snapshot.verified == snapshot.pieces {
-            self.progress.done.store(true, Ordering::Relaxed);
-        }
-        Ok(())
-    }
-
-    fn fetch_piece(&self, address: SocketAddr, index: usize) -> Result<Vec<u8>> {
+    /// Handshake and unchoke with one peer, returning the live stream and its
+    /// bitfield (when it announced one) for the pieces ahead.
+    fn negotiate(&self, address: SocketAddr) -> Result<(TcpStream, Option<Vec<u8>>)> {
+        self.progress.mark_peer(address, "connecting");
         let mut stream = TcpStream::connect_timeout(&address, Duration::from_secs(10))?;
         stream.set_read_timeout(Some(Duration::from_secs(30)))?;
         stream.set_write_timeout(Some(Duration::from_secs(30)))?;
+        // Requests are small and urgent: let them leave without waiting for
+        // acknowledgements to pile up.
+        stream.set_nodelay(true)?;
         peer::write_handshake(&mut stream, &self.torrent.info_hash, &self.peer_id)?;
         peer::read_handshake(&mut stream, &self.torrent.info_hash)?;
         peer::write_message(&mut stream, &Message::Interested)?;
@@ -540,7 +556,117 @@ impl Shared {
                 }
             }
         }
-        if let Some(bits) = &bitfield {
+        Ok((stream, bitfield))
+    }
+
+    /// Wait (bounded) for the swarm to yield a peer worth negotiating with.
+    /// The address queue is refilled by run()'s attempt cycle and, when that
+    /// is too slow for us, by our own tracker burst. `None` means give the
+    /// worker slot back to the session.
+    fn acquire_connection(&self) -> Option<(SocketAddr, TcpStream, Option<Vec<u8>>)> {
+        let deadline = Instant::now() + PEER_WAIT;
+        loop {
+            if self.stop.load(Ordering::Relaxed) {
+                return None;
+            }
+            while self.pause.load(Ordering::Relaxed) {
+                if self.stop.load(Ordering::Relaxed) {
+                    return None;
+                }
+                std::thread::sleep(Duration::from_millis(50));
+            }
+            let address = {
+                let mut queue = self.peers.lock().unwrap();
+                let address = queue.pop_front();
+                // Small swarms circulate: one address may serve several
+                // connections, so the queue never drains below a few entries
+                // and a lone seeder cannot strand the round.
+                if let Some(address) = &address {
+                    if queue.len() < 2 {
+                        queue.push_back(*address);
+                    }
+                }
+                address
+            };
+            if let Some(address) = address {
+                match self.negotiate(address) {
+                    Ok((stream, bits)) => return Some((address, stream, bits)),
+                    Err(err) => {
+                        eprintln!("peer {address} refused: {err}");
+                        self.progress.mark_peer(address, "failed");
+                        continue;
+                    }
+                }
+            }
+            if Instant::now() >= deadline {
+                return None;
+            }
+            self.refill_peers();
+            std::thread::sleep(Duration::from_millis(250));
+        }
+    }
+
+    /// One tracker burst that replaces the address queue. Starved workers fire
+    /// this so a round does not die waiting for run()'s next attempt; the gap
+    /// keeps a pack of hungry workers from stampeding the tracker at once.
+    /// DHT (the slow half of discovery) stays with run()'s attempt cycle.
+    fn refill_peers(&self) {
+        {
+            let mut last = self.last_refill.lock().unwrap();
+            if last.elapsed() < PEER_REFILL_GAP {
+                return;
+            }
+            *last = Instant::now();
+        }
+        let snapshot = self.progress.snapshot();
+        let left = snapshot.total.saturating_sub(snapshot.downloaded);
+        let request =
+            AnnounceRequest::new(self.torrent.info_hash, self.peer_id, snapshot.total, left);
+        let mut discovered = Vec::new();
+        for url in &self.torrent.trackers {
+            if let Ok(response) = tracker::announce(url, &request) {
+                discovered.extend(response.peers.into_iter().filter(|addr| addr.is_ipv4()));
+            }
+        }
+        let mut list: Vec<SocketAddr> = self
+            .explicit
+            .as_ref()
+            .map(|list| list.iter().copied().collect())
+            .unwrap_or(discovered);
+        let mut seen = std::collections::HashSet::new();
+        list.retain(|address| seen.insert(*address));
+        {
+            let mut queue = self.peers.lock().unwrap();
+            queue.clear();
+            queue.extend(list.iter().copied());
+        }
+        for address in &list {
+            self.progress.track_peer(*address);
+        }
+    }
+
+    fn commit(&self, index: usize, data: &[u8]) -> Result<()> {
+        // fetch_piece already proved the SHA-1; here the piece lands.
+        self.storage
+            .write_piece(index, self.torrent.piece_length, data)?;
+        self.progress
+            .downloaded
+            .fetch_add(data.len() as u64, Ordering::Relaxed);
+        self.progress.verified.fetch_add(1, Ordering::Relaxed);
+        let snapshot = self.progress.snapshot();
+        if snapshot.verified == snapshot.pieces {
+            self.progress.done.store(true, Ordering::Relaxed);
+        }
+        Ok(())
+    }
+
+    fn fetch_piece(
+        &self,
+        mut stream: &mut TcpStream,
+        bits: Option<&[u8]>,
+        index: usize,
+    ) -> Result<Vec<u8>> {
+        if let Some(bits) = bits {
             if !peer::has_piece(bits, index) {
                 return Err(Error::Peer(format!("peer does not have piece {index}")));
             }
@@ -598,6 +724,15 @@ impl Shared {
                 }
             }
         }
+        // Corrupt bytes fail here, so the caller disconnects the peer that
+        // sent them instead of writing the damage to disk.
+        let mut hasher = Sha1::new();
+        hasher.update(&piece);
+        if hasher.finalize().as_slice() != self.torrent.pieces[index] {
+            return Err(Error::Peer(format!(
+                "piece {index} failed SHA-1 verification"
+            )));
+        }
         Ok(piece)
     }
 }
@@ -637,49 +772,49 @@ mod tests {
         first_gate: std::sync::mpsc::Receiver<()>,
     ) {
         let mut first = true;
-        for _ in 0..pieces {
-            let Ok((mut stream, _)) = listener.accept() else {
-                return;
-            };
-            let _ = stream.set_read_timeout(Some(Duration::from_secs(10)));
-            if peer::read_handshake(&mut stream, &info_hash).is_err() {
-                continue;
-            }
-            let _ = peer::write_handshake(&mut stream, &info_hash, &[7u8; 20]);
-            let mut bits = vec![0u8; pieces.div_ceil(8)];
-            for index in 0..pieces {
-                bits[index / 8] |= 0x80 >> (index % 8);
-            }
-            let _ = peer::write_message(
-                &mut stream,
-                &Message::Extended(0, b"d1:md11:ut_metadatai1:ee".to_vec()),
-            );
-            let _ = peer::write_message(&mut stream, &Message::Bitfield(bits));
-            while !matches!(peer::read_message(&mut stream), Ok(Message::Interested)) {}
-            let _ = peer::write_message(&mut stream, &Message::Unchoke);
-            while let Ok(message) = peer::read_message(&mut stream) {
-                if let Message::Request {
-                    index,
-                    begin,
-                    length,
-                } = message
-                {
-                    let _ = requests.send(());
-                    if first {
-                        first = false;
-                        let _ = first_gate.recv();
-                    }
-                    let start = index as usize * piece_length + begin as usize;
-                    let end = (start + length as usize).min(data.len());
-                    let _ = peer::write_message(
-                        &mut stream,
-                        &Message::Piece {
-                            index,
-                            begin,
-                            data: data[start..end].to_vec(),
-                        },
-                    );
+        // One connection, served until the leech hangs up: the piece worker
+        // keeps a negotiated peer for the whole round.
+        let Ok((mut stream, _)) = listener.accept() else {
+            return;
+        };
+        let _ = stream.set_read_timeout(Some(Duration::from_secs(10)));
+        if peer::read_handshake(&mut stream, &info_hash).is_err() {
+            return;
+        }
+        let _ = peer::write_handshake(&mut stream, &info_hash, &[7u8; 20]);
+        let mut bits = vec![0u8; pieces.div_ceil(8)];
+        for index in 0..pieces {
+            bits[index / 8] |= 0x80 >> (index % 8);
+        }
+        let _ = peer::write_message(
+            &mut stream,
+            &Message::Extended(0, b"d1:md11:ut_metadatai1:ee".to_vec()),
+        );
+        let _ = peer::write_message(&mut stream, &Message::Bitfield(bits));
+        while !matches!(peer::read_message(&mut stream), Ok(Message::Interested)) {}
+        let _ = peer::write_message(&mut stream, &Message::Unchoke);
+        while let Ok(message) = peer::read_message(&mut stream) {
+            if let Message::Request {
+                index,
+                begin,
+                length,
+            } = message
+            {
+                let _ = requests.send(());
+                if first {
+                    first = false;
+                    let _ = first_gate.recv();
                 }
+                let start = index as usize * piece_length + begin as usize;
+                let end = (start + length as usize).min(data.len());
+                let _ = peer::write_message(
+                    &mut stream,
+                    &Message::Piece {
+                        index,
+                        begin,
+                        data: data[start..end].to_vec(),
+                    },
+                );
             }
         }
     }
@@ -692,47 +827,47 @@ mod tests {
         pieces: usize,
         info_hash: [u8; 20],
     ) {
-        for _ in 0..pieces {
-            let Ok((mut stream, _)) = listener.accept() else {
-                return;
-            };
-            let _ = stream.set_read_timeout(Some(Duration::from_secs(10)));
-            if peer::read_handshake(&mut stream, &info_hash).is_err() {
-                continue;
-            }
-            let _ = peer::write_handshake(&mut stream, &info_hash, &[7u8; 20]);
-            let mut bits = vec![0u8; pieces.div_ceil(8)];
-            for index in 0..pieces {
-                bits[index / 8] |= 0x80 >> (index % 8);
-            }
-            // A BEP 10 peer sends its extension handshake right after the wire
-            // handshake, before the bitfield and unchoke; the piece worker must
-            // ignore it instead of calling the peer broken.
-            let _ = peer::write_message(
-                &mut stream,
-                &Message::Extended(0, b"d1:md11:ut_metadatai1:ee".to_vec()),
-            );
-            let _ = peer::write_message(&mut stream, &Message::Bitfield(bits));
-            while !matches!(peer::read_message(&mut stream), Ok(Message::Interested)) {}
-            let _ = peer::write_message(&mut stream, &Message::Unchoke);
-            while let Ok(message) = peer::read_message(&mut stream) {
-                if let Message::Request {
-                    index,
-                    begin,
-                    length,
-                } = message
-                {
-                    let start = index as usize * piece_length + begin as usize;
-                    let end = (start + length as usize).min(data.len());
-                    let _ = peer::write_message(
-                        &mut stream,
-                        &Message::Piece {
-                            index,
-                            begin,
-                            data: data[start..end].to_vec(),
-                        },
-                    );
-                }
+        // One connection, served until the leech hangs up: the piece worker
+        // keeps a negotiated peer for the whole round.
+        let Ok((mut stream, _)) = listener.accept() else {
+            return;
+        };
+        let _ = stream.set_read_timeout(Some(Duration::from_secs(10)));
+        if peer::read_handshake(&mut stream, &info_hash).is_err() {
+            return;
+        }
+        let _ = peer::write_handshake(&mut stream, &info_hash, &[7u8; 20]);
+        let mut bits = vec![0u8; pieces.div_ceil(8)];
+        for index in 0..pieces {
+            bits[index / 8] |= 0x80 >> (index % 8);
+        }
+        // A BEP 10 peer sends its extension handshake right after the wire
+        // handshake, before the bitfield and unchoke; the piece worker must
+        // ignore it instead of calling the peer broken.
+        let _ = peer::write_message(
+            &mut stream,
+            &Message::Extended(0, b"d1:md11:ut_metadatai1:ee".to_vec()),
+        );
+        let _ = peer::write_message(&mut stream, &Message::Bitfield(bits));
+        while !matches!(peer::read_message(&mut stream), Ok(Message::Interested)) {}
+        let _ = peer::write_message(&mut stream, &Message::Unchoke);
+        while let Ok(message) = peer::read_message(&mut stream) {
+            if let Message::Request {
+                index,
+                begin,
+                length,
+            } = message
+            {
+                let start = index as usize * piece_length + begin as usize;
+                let end = (start + length as usize).min(data.len());
+                let _ = peer::write_message(
+                    &mut stream,
+                    &Message::Piece {
+                        index,
+                        begin,
+                        data: data[start..end].to_vec(),
+                    },
+                );
             }
         }
     }

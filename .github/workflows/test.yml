@@ -30,3 +30,35 @@ jobs:
         run: cargo clippy --all-targets -- -D warnings
       - name: Test
         run: cargo test --all
+
+  scripts:
+    # The installers are the first code a user runs; they get their own gate.
+    name: script-gate
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            pwsh: false
+          - os: windows-latest
+            pwsh: true
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: shellcheck (install.sh)
+        if: ${{ matrix.os == 'ubuntu-latest' }}
+        run: |
+          shellcheck --version
+          shellcheck install.sh
+      - name: PSScriptAnalyzer (install.ps1)
+        if: ${{ matrix.os == 'windows-latest' }}
+        shell: pwsh
+        run: |
+          Install-Module PSScriptAnalyzer -Scope CurrentUser -Force -SkipPublisherCheck
+          Import-Module PSScriptAnalyzer
+          $violations = Invoke-ScriptAnalyzer -Path ./install.ps1 -Settings ./PSScriptAnalyzerSettings.psd1 -Severity Error, Warning
+          if ($violations) {
+            $violations | ForEach-Object { "{0}:{1} [{2}] {3}" -f $_.ScriptName, $_.Line, $_.RuleName, $_.Message }
+            exit 1
+          }
+          "install.ps1 clean"

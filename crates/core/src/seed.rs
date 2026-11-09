@@ -1,6 +1,12 @@
 //! Seeding: serving pieces we verified on disk to whoever connects.
+//!
+//! A seeder is also where magnet links get their start: the first peer with
+//! the metadata is usually a seed, so the serve loop answers BEP 9
+//! `ut_metadata` exchanges alongside ordinary piece requests.
 
+use crate::bencode::{self, Value};
 use crate::error::{Error, Result};
+use crate::metadata;
 use crate::peer::{self, Message};
 use crate::storage::Storage;
 use crate::torrent::Torrent;
@@ -29,6 +35,40 @@ pub struct SeedReport {
 struct Totals {
     peers: AtomicUsize,
     bytes: AtomicU64,
+}
+
+/// Our BEP 9 announcements: which local id answers `ut_metadata`, and how
+/// big the metadata blobs we can serve are.
+fn metadata_handshake(total: usize) -> Vec<u8> {
+    bencode::encode(&Value::Dict(vec![
+        (
+            b"m".to_vec(),
+            Value::Dict(vec![(
+                metadata::UT_METADATA.to_vec(),
+                Value::Int(metadata::OUR_METADATA_ID as i64),
+            )]),
+        ),
+        (b"metadata_size".to_vec(), Value::Int(total as i64)),
+        (b"v".to_vec(), Value::Bytes(b"ftc 3.0".to_vec())),
+    ]))
+}
+
+/// One BEP 9 data message: the bencoded header carries the type, the piece
+/// number and the total size; the bytes of the piece follow immediately.
+fn metadata_data(piece: usize, raw: &[u8]) -> Vec<u8> {
+    let start = piece * metadata::METADATA_PIECE;
+    let end = (start + metadata::METADATA_PIECE).min(raw.len());
+    let block = raw
+        .get(start..end)
+        .unwrap_or_else(|| raw.get(raw.len()..).unwrap_or(&[]));
+    bencode::encode(&Value::Dict(vec![
+        (b"msg_type".to_vec(), Value::Int(1)),
+        (b"piece".to_vec(), Value::Int(piece as i64)),
+        (b"total_size".to_vec(), Value::Int(raw.len() as i64)),
+    ]))
+    .into_iter()
+    .chain(block.iter().copied())
+    .collect()
 }
 
 /// Serve from `storage` to inbound peers for `duration`, `max_peers` at a
@@ -118,6 +158,8 @@ fn handle(
     // Accepted sockets inherit the listener's non-blocking flag on BSD/macOS;
     // undo it or every read comes back as EAGAIN (os error 35).
     stream.set_nonblocking(false)?;
+    // Same reason as the downloader side: block requests should leave unbuffered.
+    stream.set_nodelay(true)?;
     stream.set_read_timeout(Some(PEER_IDLE))?;
     // The downloader speaks first; we mirror the handshake and stay only if
     // both sides agree on which torrent this socket is about.
@@ -126,6 +168,10 @@ fn handle(
     stream.set_write_timeout(Some(PEER_IDLE))?;
     peer::write_handshake(&mut stream, &torrent.info_hash, &self_id)?;
     totals.peers.fetch_add(1, Ordering::Relaxed);
+
+    // Magnet fetchers speak BEP 10 first: remember which local id they
+    // listen on for metadata, and introduce our own in return.
+    let mut peer_ut: Option<u8> = None;
 
     // The bitfield of what we hold, MSB-first like every BitTorrent client.
     let mut bitfield = Vec::with_capacity(have.len().div_ceil(8));
@@ -181,6 +227,54 @@ fn handle(
                     },
                 )?;
                 totals.bytes.fetch_add(length, Ordering::Relaxed);
+            }
+            Message::Extended(id, payload) => {
+                if id == 0 {
+                    // Their extension handshake: pick up their metadata id,
+                    // then advertise ours along with the metadata size.
+                    if peer_ut.is_none() {
+                        peer_ut = metadata::parse_extension_handshake(&payload)
+                            .ok()
+                            .and_then(|(id, _)| id);
+                    }
+                    peer::write_message(
+                        &mut stream,
+                        &Message::Extended(0, metadata_handshake(torrent.raw_info.len())),
+                    )?;
+                } else if let Ok((header, used)) = bencode::decode_prefix(&payload) {
+                    // A ut_metadata exchange addressed to us: requests get
+                    // data, rejects and unknown types are ignored.
+                    let kind = header.get("msg_type").and_then(Value::as_int).unwrap_or(-1);
+                    if kind == 0 {
+                        // Replies are addressed with the peer's advertised id
+                        // (BEP 10): each side picks the id the other must use.
+                        let reply_id = peer_ut.unwrap_or(id);
+                        let piece = header.get("piece").and_then(Value::as_int).unwrap_or(-1);
+                        let in_range = piece >= 0
+                            && (piece as usize) * metadata::METADATA_PIECE < torrent.raw_info.len();
+                        if in_range {
+                            peer::write_message(
+                                &mut stream,
+                                &Message::Extended(
+                                    reply_id,
+                                    metadata_data(piece as usize, &torrent.raw_info),
+                                ),
+                            )?;
+                        } else {
+                            peer::write_message(
+                                &mut stream,
+                                &Message::Extended(
+                                    reply_id,
+                                    bencode::encode(&Value::Dict(vec![
+                                        (b"msg_type".to_vec(), Value::Int(2)),
+                                        (b"piece".to_vec(), Value::Int(piece)),
+                                    ])),
+                                ),
+                            )?;
+                        }
+                    }
+                    let _ = used;
+                }
             }
             // Bitfields and haves from neighboring seeders, chokes, cancels
             // and exotic messages — nothing here asks us for disk.
@@ -302,6 +396,109 @@ mod tests {
         }
         // ...and the server drops the connection: EOF, not a message.
         matches!(stream.read(&mut [0u8; 1]), Ok(0) | Err(_))
+    }
+
+    /// A ut_metadata fetcher: handshake, announce a metadata id, read ours,
+    /// request piece 0, and compare the bytes against the real info dict.
+    fn fake_magnet(port: u16, info_hash: &[u8; 20], expected: &[u8]) -> bool {
+        let mut maybe = None;
+        for _ in 0..60 {
+            if let Ok(stream) = TcpStream::connect(("127.0.0.1", port)) {
+                maybe = Some(stream);
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(100));
+        }
+        let mut stream = match maybe {
+            Some(stream) => stream,
+            None => return false,
+        };
+        let my_id = *b"-FT0300-magnet000000";
+        if peer::write_handshake(&mut stream, info_hash, &my_id).is_err() {
+            return false;
+        }
+        if peer::read_handshake(&mut stream, info_hash).is_err() {
+            return false;
+        }
+        let mine = bencode::encode(&Value::Dict(vec![(
+            b"m".to_vec(),
+            Value::Dict(vec![(b"ut_metadata".to_vec(), Value::Int(7))]),
+        )]));
+        if peer::write_message(&mut stream, &Message::Extended(0, mine)).is_err() {
+            return false;
+        }
+        // Wait for the seeder's handshake: it names the id our requests must
+        // carry, and the size of the metadata it serves.
+        let (mut seeder_ut, mut size, mut announced) = (1u8, None, false);
+        while !announced {
+            match peer::read_message(&mut stream) {
+                Ok(Message::Extended(0, payload)) => {
+                    if let Ok((header, _)) = bencode::decode_prefix(&payload) {
+                        size = header.get("metadata_size").and_then(Value::as_int);
+                        seeder_ut = header
+                            .get("m")
+                            .and_then(|m| m.get("ut_metadata"))
+                            .and_then(Value::as_int)
+                            .and_then(|id| u8::try_from(id).ok())
+                            .unwrap_or(1);
+                    }
+                    announced = true;
+                }
+                Ok(_) => {}
+                Err(_) => return false,
+            }
+        }
+        if size != Some(expected.len() as i64) {
+            return false;
+        }
+        let request = bencode::encode(&Value::Dict(vec![
+            (b"msg_type".to_vec(), Value::Int(0)),
+            (b"piece".to_vec(), Value::Int(0)),
+        ]));
+        if peer::write_message(&mut stream, &Message::Extended(seeder_ut, request)).is_err() {
+            return false;
+        }
+        // The data must come back addressed to 7 (our advertised id) with the
+        // exact bytes of piece 0.
+        loop {
+            match peer::read_message(&mut stream) {
+                Ok(Message::Extended(id, payload)) => {
+                    if id == 0 {
+                        continue;
+                    }
+                    if id != 7 {
+                        return false;
+                    }
+                    if let Ok((header, used)) = bencode::decode_prefix(&payload) {
+                        let slice = &payload[used..];
+                        return header.get("msg_type").and_then(Value::as_int) == Some(1)
+                            && header.get("total_size").and_then(Value::as_int)
+                                == Some(expected.len() as i64)
+                            && slice == &expected[..slice.len().min(expected.len())];
+                    }
+                    return false;
+                }
+                Ok(_) => {}
+                Err(_) => return false,
+            }
+        }
+    }
+
+    #[test]
+    fn serves_magnet_metadata_to_bep9_fetchers() {
+        let (root, storage, torrent, _) = seeded("utmeta", &["seed me with metadata!"]);
+        let info_hash = torrent.info_hash;
+        let raw = torrent.raw_info.clone();
+        const UT_PORT: u16 = 16875;
+        let server = std::thread::spawn(move || {
+            let _ = serve(storage, torrent, UT_PORT, 2, Duration::from_secs(6));
+        });
+
+        let ok = fake_magnet(UT_PORT, &info_hash, &raw);
+        assert!(ok, "the magnet fetcher received the info dictionary");
+
+        let _ = server.join();
+        let _ = std::fs::remove_dir_all(&root);
     }
 
     #[test]

@@ -6,7 +6,7 @@ use ftc_core::{magnet, Session, Snapshot, Torrent};
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::process::ExitCode;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -21,6 +21,7 @@ OPTIONS:
         --peers <list>    comma-separated host:port peers, skipping the tracker
         --max-peers <n>   simultaneous peer connections (default: 6)
         --no-dht          skip DHT peer discovery (trackers only)
+        --port <n>        port to announce over trackers and the DHT (default: 6881)
         --seed <secs>     after finishing, serve pieces to peers for <secs>s
         --limit <rate>    cap the download rate, e.g. 500k or 2M (default: unlimited)
     -h, --help            show this help
@@ -61,6 +62,7 @@ OPTIONS:
     -o, --output <dir>    default download directory (default: current directory)
         --max-peers <n>   simultaneous peer connections (default: 6)
         --no-dht          skip DHT peer discovery (trackers only)
+        --swarm-port <n>  port for trackers and the DHT (default: 6881)
         --limit <rate>    default download cap for new jobs, e.g. 2M
         --open            also open the page in your browser
     -h, --help            show this help
@@ -134,6 +136,13 @@ fn run() -> Result<(), String> {
                 let value = args.next().ok_or("--limit needs a rate")?;
                 options.limit_bps = Some(parse_rate(&value)?);
             }
+            "--port" => {
+                options.port = args
+                    .next()
+                    .ok_or("--port needs a number")?
+                    .parse()
+                    .map_err(|err| format!("bad --port: {err}"))?;
+            }
             "--seed" => {
                 let value = args.next().ok_or("--seed needs seconds")?;
                 seed_secs = value.parse().map_err(|err| format!("bad --seed: {err}"))?;
@@ -162,15 +171,54 @@ fn run() -> Result<(), String> {
             link.trackers.len()
         );
         let peer_id = ftc_core::session::make_peer_id();
-        let info = ftc_core::metadata::fetch(
+
+        // While the metadata exchange blocks, an animated sweep owns the next
+        // line — the terminal twin of the web ui's indeterminate metadata bar.
+        let sweep_stop = Arc::new(AtomicBool::new(false));
+        let sweep = if colors_enabled() {
+            Some({
+                let stop = sweep_stop.clone();
+                std::thread::spawn(move || {
+                    use std::io::Write;
+                    let mut tick = 0;
+                    while !stop.load(Ordering::Relaxed) {
+                        print_metadata_sweep(tick);
+                        tick += 1;
+                        std::thread::sleep(Duration::from_millis(120));
+                    }
+                    // done with the row the sweep owned
+                    print!("\r\x1b[0K");
+                    let _ = std::io::stdout().flush();
+                })
+            })
+        } else {
+            None
+        };
+
+        // The fetch blocks; the sweep keeps the line alive until it returns.
+        let torrent = match ftc_core::metadata::fetch(
             &link.trackers,
             &link.info_hash,
             &peer_id,
             options.port,
             options.use_dht,
-        )
-        .map_err(|err| format!("metadata exchange failed: {err}"))?;
-        Torrent::from_info(&info, &link.trackers).map_err(|err| err.to_string())?
+        ) {
+            Ok(info) => {
+                sweep_stop.store(true, Ordering::Relaxed);
+                if let Some(sweep) = sweep {
+                    let _ = sweep.join();
+                }
+                Torrent::from_info(&info, &link.trackers).map_err(|err| err.to_string())?
+            }
+            Err(err) => {
+                sweep_stop.store(true, Ordering::Relaxed);
+                if let Some(sweep) = sweep {
+                    let _ = sweep.join();
+                }
+                return Err(format!("metadata exchange failed: {err}"));
+            }
+        };
+        torrent
     } else {
         let bytes = std::fs::read(&target).map_err(|err| format!("cannot read {target}: {err}"))?;
         Torrent::parse(&bytes).map_err(|err| err.to_string())?
@@ -196,20 +244,38 @@ fn run() -> Result<(), String> {
         Session::open(torrent, &output, options).map_err(|err| err.to_string())?;
 
     let stop = Arc::new(AtomicBool::new(false));
+    let final_state = Arc::new(AtomicU8::new(0));
     let reporter = {
         let stop = stop.clone();
+        let state = final_state.clone();
         let progress = progress.clone();
         std::thread::spawn(move || {
+            let mut tick = 0;
             while !stop.load(Ordering::Relaxed) {
                 let snapshot = progress.snapshot();
-                print_progress(&snapshot, progress.bytes_per_second());
-                std::thread::sleep(Duration::from_millis(500));
+                print_progress(
+                    &snapshot,
+                    progress.bytes_per_second(),
+                    bar_state(state.load(Ordering::Relaxed)),
+                    tick,
+                );
+                tick += 1;
+                std::thread::sleep(Duration::from_millis(120));
             }
+            // the closing frame: one final snapshot in the final state
+            let snapshot = progress.snapshot();
+            print_progress(
+                &snapshot,
+                progress.bytes_per_second(),
+                bar_state(state.load(Ordering::Relaxed)),
+                tick,
+            );
             println!();
         })
     };
 
     let result = session.run(peers);
+    final_state.store(if result.is_ok() { 1 } else { 2 }, Ordering::Relaxed);
     stop.store(true, Ordering::Relaxed);
     let _ = reporter.join();
 
@@ -355,6 +421,14 @@ fn run_server(args: &[String], gui: bool) -> Result<(), String> {
                 }
                 index += 2;
             }
+            "--swarm-port" => {
+                options.port = args
+                    .get(index + 1)
+                    .ok_or("--swarm-port needs a number")?
+                    .parse()
+                    .map_err(|err| format!("bad --swarm-port: {err}"))?;
+                index += 2;
+            }
             "--no-dht" => {
                 options.use_dht = false;
                 index += 1;
@@ -458,18 +532,229 @@ fn percent_of(snapshot: &Snapshot) -> u32 {
     ((snapshot.downloaded as f64 / snapshot.total as f64) * 100.0) as u32
 }
 
-fn print_progress(snapshot: &Snapshot, speed: f64) {
-    let percent = percent_of(snapshot);
-    let bar_width = 30usize;
-    let filled = (percent as usize * bar_width / 100).min(bar_width);
-    let bar: String = "█".repeat(filled) + &"░".repeat(bar_width - filled);
-    print!(
-        "\r[{bar}] {percent:3}%  {}/{}  {:.1} MiB/s  {} peers",
-        snapshot.verified,
-        snapshot.pieces,
-        speed / (1024.0 * 1024.0),
-        snapshot.active_peers
-    );
+// ---------- terminal bar — mirrors the web ui's `.prog` bar -----------------
+
+const BAR_WIDTH: usize = 30;
+
+// the exact tokens of the web ui: active blue gradient, done green, failed
+// red; the track dots; the dim separators.
+const BLUE_L: (u8, u8, u8) = (0x4c, 0x86, 0xbc);
+const BLUE_D: (u8, u8, u8) = (0x2f, 0x6f, 0xa8);
+const GREEN_D: (u8, u8, u8) = (0x2e, 0x7d, 0x5b);
+const GREEN_L: (u8, u8, u8) = (0x4f, 0xa3, 0x7c);
+const RED_D: (u8, u8, u8) = (0x9c, 0x4a, 0x42);
+const RED_L: (u8, u8, u8) = (0xc0, 0x6a, 0x60);
+const TRACK: (u8, u8, u8) = (0x84, 0x92, 0xa0);
+const DIM: (u8, u8, u8) = (0x84, 0x92, 0xa0);
+
+const SPINNER: [&str; 10] = [
+    "\u{280b}", "\u{2819}", "\u{2839}", "\u{2838}", "\u{287c}", "\u{2874}", "\u{2866}", "\u{2867}",
+    "\u{2887}", "\u{288f}",
+];
+
+// eighth-block steps: the fill grows inside a cell, like the web ui's
+// `width` transition.
+const PARTIALS: [&str; 8] = [
+    "", "\u{258f}", "\u{258e}", "\u{258d}", "\u{258c}", "\u{258b}", "\u{258a}", "\u{2589}",
+];
+
+fn colors_enabled() -> bool {
+    use std::io::IsTerminal;
+    std::io::stdout().is_terminal()
+        && std::env::var_os("NO_COLOR").is_none()
+        && !matches!(std::env::var("TERM").as_deref(), Ok("dumb"))
+        && (cfg!(not(target_os = "windows"))
+            || std::env::var_os("WT_SESSION").is_some()
+            || std::env::var("ConEmuANSI").is_ok_and(|v| v == "ON"))
+}
+
+#[derive(Clone, Copy)]
+enum BarState {
+    Active,
+    Done,
+    Failed,
+}
+
+fn bar_state(raw: u8) -> BarState {
+    match raw {
+        1 => BarState::Done,
+        2 => BarState::Failed,
+        _ => BarState::Active,
+    }
+}
+
+fn mix(a: (u8, u8, u8), b: (u8, u8, u8), t: f64) -> String {
+    let ch: fn(f64) -> u8 = |x: f64| x.round() as u8;
+    format!(
+        "\x1b[38;2;{};{};{}m",
+        ch(a.0 as f64 + (b.0 as f64 - a.0 as f64) * t),
+        ch(a.1 as f64 + (b.1 as f64 - a.1 as f64) * t),
+        ch(a.2 as f64 + (b.2 as f64 - a.2 as f64) * t),
+    )
+}
+
+// the web ui's byte formatting: B / KB / MB / GB, one decimal below 100
+fn fmt_bytes(mut value: f64) -> String {
+    if value < 1.0 {
+        return "0 B".into();
+    }
+    const UNITS: [&str; 5] = ["B", "KB", "MB", "GB", "TB"];
+    let mut index = 0;
+    while value >= 1024.0 && index < UNITS.len() - 1 {
+        value /= 1024.0;
+        index += 1;
+    }
+    let digits = if index == 0 || value >= 100.0 { 0 } else { 1 };
+    format!("{:.*} {}", digits, value, UNITS[index])
+}
+
+fn fmt_speed(value: f64) -> String {
+    if value > 0.5 {
+        format!("{}/s", fmt_bytes(value))
+    } else {
+        "—".into()
+    }
+}
+
+fn fmt_eta(remaining: f64, speed: f64) -> String {
+    if speed <= 0.5 {
+        return "—".into();
+    }
+    let seconds = (remaining / speed).round() as u64;
+    if seconds > 86_400 {
+        return ">1d".into();
+    }
+    if seconds >= 3_600 {
+        return format!("{}h {:02}m", seconds / 3_600, (seconds % 3_600) / 60);
+    }
+    if seconds >= 60 {
+        return format!("{}m {:02}s", seconds / 60, seconds % 60);
+    }
+    format!("{}s", seconds.max(1))
+}
+
+fn print_progress(snapshot: &Snapshot, speed: f64, state: BarState, tick: usize) {
     use std::io::Write;
+    let colors = colors_enabled();
+    let finished = snapshot.pieces > 0 && snapshot.verified >= snapshot.pieces;
+    let percent = if finished { 100 } else { percent_of(snapshot) };
+    let (left, right, marker, label) = match state {
+        BarState::Active => (BLUE_L, BLUE_D, SPINNER[tick % SPINNER.len()], ""),
+        BarState::Done => (GREEN_D, GREEN_L, "\u{2713}", "done"),
+        BarState::Failed => (RED_D, RED_L, "\u{2715}", "failed"),
+    };
+
+    let mut line = String::new();
+    if colors {
+        line += &mix(left, right, 0.0);
+    }
+    line += marker;
+    if colors {
+        line += "\x1b[0m";
+    }
+    line.push(' ');
+
+    if colors {
+        let exact = (percent as f64 / 100.0) * BAR_WIDTH as f64;
+        let mut filled = exact.floor() as usize;
+        let mut frac = ((exact - filled as f64) * 8.0).round() as usize;
+        if frac == 8 {
+            filled += 1;
+            frac = 0;
+        }
+        let filled = filled.min(BAR_WIDTH);
+        // the gradient spans the fill's own width, exactly like `linear-gradient`
+        // on the web ui's fill element
+        let span = (exact - 1.0).max(0.9);
+        for i in 0..filled {
+            line += &mix(left, right, (i as f64 / span).min(1.0));
+            line.push('\u{2588}');
+            line += "\x1b[0m";
+        }
+        if filled < BAR_WIDTH && frac > 0 {
+            line += &mix(left, right, (filled as f64 / span).min(1.0));
+            line += PARTIALS[frac];
+            line += "\x1b[0m";
+        }
+        if filled < BAR_WIDTH || frac > 0 {
+            line += &mix(TRACK, TRACK, 0.0);
+            let painted = filled + usize::from(filled < BAR_WIDTH && frac > 0);
+            for _ in painted..BAR_WIDTH {
+                line.push('\u{2591}');
+            }
+            line += "\x1b[0m";
+        }
+    } else {
+        let filled = (percent as usize * BAR_WIDTH / 100).min(BAR_WIDTH);
+        line.push('[');
+        for i in 0..BAR_WIDTH {
+            line.push(if i < filled { '\u{2588}' } else { '\u{2591}' });
+        }
+        line.push(']');
+    }
+
+    // the stats to the bar's right, in the web ui's own units
+    let stats = match state {
+        BarState::Active => {
+            let remaining = snapshot.total.saturating_sub(snapshot.downloaded) as f64;
+            let eta = fmt_eta(remaining, speed);
+            format!(
+                " · {} · eta {} · {} peers",
+                fmt_speed(speed),
+                eta,
+                snapshot.active_peers
+            )
+        }
+        BarState::Done => format!(" · {} · {}", label, fmt_bytes(snapshot.total as f64)),
+        BarState::Failed => format!(" · {}", label),
+    };
+    if colors {
+        for part in stats.split(" · ") {
+            if part.is_empty() {
+                continue;
+            }
+            line += &mix(DIM, DIM, 0.0);
+            line += " · ";
+            line += "\x1b[0m";
+            line += part;
+        }
+    } else {
+        line += &stats;
+    }
+
+    print!("\r{line}\x1b[0K");
+    let _ = std::io::stdout().flush();
+}
+
+// indeterminate metadata bar: a 40%-wide blue window sweeps the track, the
+// terminal twin of the web ui's `metadata` state.
+fn print_metadata_sweep(tick: usize) {
+    use std::io::Write;
+    let window = (BAR_WIDTH * 2 / 5).max(1);
+    let cycle = BAR_WIDTH + window;
+    let pos = (tick % cycle) as i64 - window as i64;
+    let mut line = String::new();
+    line += &mix(BLUE_L, BLUE_D, 0.0);
+    line += SPINNER[tick % SPINNER.len()];
+    line += "\x1b[0m ";
+    for i in 0..BAR_WIDTH {
+        let inside = pos <= i as i64 && (i as i64) < pos + window as i64;
+        if inside {
+            let t = if window > 1 {
+                (i as i64 - pos) as f64 / (window - 1) as f64
+            } else {
+                0.0
+            };
+            line += &mix(BLUE_L, BLUE_D, t);
+            line.push('\u{2588}');
+        } else {
+            line += &mix(TRACK, TRACK, 0.0);
+            line.push('\u{2591}');
+        }
+        line += "\x1b[0m";
+    }
+    line += &mix(DIM, DIM, 0.0);
+    line += " · fetching metadata\x1b[0m";
+    print!("\r{line}\x1b[0K");
     let _ = std::io::stdout().flush();
 }

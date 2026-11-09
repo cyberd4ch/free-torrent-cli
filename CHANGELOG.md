@@ -7,6 +7,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **A progress bar worth watching.** The CLI now renders one graphic bar that
+  repaints in place: a gradient fill in the same blues the GUI uses, a green
+  set when the piece count settles, a braille spinner, live aggregate rate,
+  ETA and peer count. It mirrors the GUI's own states — amber while, green
+  done, red failure — because it renders from the same engines' counters. It
+  stays plain text (and never repaints) when the output is not a terminal,
+  when `NO_COLOR` is set, or a Windows host without ANSI support.
+- **Port control where it matters.** `--port <n>` on downloads (announce and
+  accept) and `--swarm-port <n>` on `ftc serve`, so crowded networks and
+  multiple concurrent clients stop colliding on 6881.
+- **The seeder answers magnets.** A seeding process now speaks the metadata
+  exchange it consumes: on receiving an extension handshake it announces
+  `ut_metadata` plus its metadata size, and serves exact `info` dictionary
+  bytes — with out-of-range requests rejected, per BEP 9. A Footorrent-only
+  swarm can now bootstrap from the seed alone.
+- **The installers report everything or verify honestly.** `install.sh` no
+  longer skips checksum verification silently: a missing `shasum`/`sha256sum`,
+  a release without `SHA256SUMS`, or an explicit `FTC_NO_VERIFY` each print
+  their own SKIPPED line to stderr, so nobody walks away believing a digest
+  check ran. The shell installer is now checked with shellcheck and the
+  PowerShell installer with PSScriptAnalyzer (Error + Warning) in CI on every
+  push and pull request.
+- **A demo shelf.** `assets/demo/` carries real captures — the terminal bar
+  (GIF + MP4), the metadata lookup loop and the GUI in flight — embedded in
+  the README instead of mockups.
+
+### Fixed
+
+- **One dead minute at 30 KB/s.** Piece workers used to exit permanently the
+  moment the address queue went empty and re-dialled a fresh connection per
+  piece, so a lone seeder collapsed to one surviving trickle and downloads
+  failed with "pieces still missing after retries". Workers now hold one
+  negotiated connection across many pieces, park and self-refill through
+  tracker bursts when the swarm goes quiet (with a minimum gap so hungry
+  workers don't stampede the tracker), and SHA-1 verification moved into the
+  block fetch so the caller disconnects corrupt peers before anything lands
+  on disk. A 120 MB torrent from a single seed went from "52 s then failed"
+  to 0.7 s uncapped and 20 s under a 6 MB/s cap.
+
 ### Changed
 
 - **License: GPL-3.0-or-later.** MIT's hand-everyone-the-code permission didn't
@@ -16,13 +57,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `LICENSE` carries the canonical GPL-3 text, and no other term was added on
   top of it.
 - **The repository front door matches the product.** The README is rewritten
-  as the pitch it should have been: the free, open-source BitTorrent client —
-  why it exists next to the ad-funded clients, what the GPL protects, a
-  use-it-legally note and how to contribute. GitHub links in the installers,
-  the docs pages and CI now point at the `footorrent` repo instead of the old
-  `free-torrent-cli` slug (they worked through GitHub's rename redirect until
-  now), while the crate and archive names keep their `free-torrent-cli` /
-  `ftc` identity as `BRAND.md` promises.
+  around what you see: the download-manager window, the terminal bar, the
+  magnet lookup — all real captures — with the installers' auditable behavior
+  reported up front and no internal plumbing (crate names, source file maps)
+  in the pitch.
 
 ## [3.5.0] - 2026-11-09
 

@@ -16,12 +16,12 @@ use std::time::{Duration, Instant};
 
 pub const METADATA_PIECE: usize = 16 * 1024;
 const MAX_METADATA: usize = 8 * 1024 * 1024;
-const UT_METADATA: &[u8] = b"ut_metadata";
+pub(crate) const UT_METADATA: &[u8] = b"ut_metadata";
 /// The extension id we advertise for messages peers send *to us*. BEP 10 has
 /// each side pick the id the other must use, so replies to our metadata
 /// requests arrive under this id — not under the peer's advertised id, which is
 /// the id we must use when sending requests to them.
-const OUR_METADATA_ID: u8 = 1;
+pub(crate) const OUR_METADATA_ID: u8 = 1;
 /// Waiting time for one trackerless-magnet DHT hunt, and a shorter second
 /// pass when the first one only reaches a couple of nodes.
 const DHT_HUNT: Duration = Duration::from_secs(15);
@@ -61,7 +61,7 @@ pub fn extension_handshake(port: u16) -> Vec<u8> {
     ]))
 }
 
-fn parse_extension_handshake(payload: &[u8]) -> Result<(Option<u8>, Option<usize>)> {
+pub(crate) fn parse_extension_handshake(payload: &[u8]) -> Result<(Option<u8>, Option<usize>)> {
     let value = bencode::decode(payload)?;
     let id = value
         .get("m")

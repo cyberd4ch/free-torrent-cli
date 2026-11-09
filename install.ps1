@@ -1,4 +1,4 @@
-# ftc installer — Windows x64.
+﻿# ftc installer — Windows x64.
 #
 #   irm https://raw.githubusercontent.com/cyberd4ch/footorrent/main/install.ps1 | iex
 #

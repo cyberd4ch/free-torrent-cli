@@ -62,7 +62,11 @@ if [ "${FTC_NO_VERIFY:-0}" != "1" ]; then
   else
     HASH=""
   fi
-  if [ -n "$HASH" ] && fetch "$URL/SHA256SUMS" "$tmp/SHA256SUMS" 2>/dev/null; then
+  if [ -z "$HASH" ]; then
+    echo "-> sha256 SKIPPED — no shasum/sha256sum on PATH; verify by hand" >&2
+  elif ! fetch "$URL/SHA256SUMS" "$tmp/SHA256SUMS" 2>/dev/null; then
+    echo "-> sha256 SKIPPED — this release carries no SHA256SUMS" >&2
+  else
     expected=$(awk -v a="$ASSET" '$2 == a { print $1 }' "$tmp/SHA256SUMS")
     actual=$($HASH "$tmp/$ASSET" | awk '{ print $1 }')
     if [ -n "$expected" ] && [ "$expected" != "$actual" ]; then
@@ -71,6 +75,8 @@ if [ "${FTC_NO_VERIFY:-0}" != "1" ]; then
     fi
     echo "-> sha256 ok"
   fi
+else
+  echo "-> sha256 SKIPPED — FTC_NO_VERIFY is set" >&2
 fi
 
 tar -xzf "$tmp/$ASSET" -C "$tmp"
@@ -163,6 +169,7 @@ fi
 case ":$PATH:" in
   *":$prefix:"*) ;;
   *)
+    # shellcheck disable=SC2016  # the literal "$PATH" is what we want to print
     printf '\n%s is not on your PATH yet:\n  export PATH="%s:$PATH"\n' "$prefix" "$prefix"
     ;;
 esac
