@@ -1,12 +1,12 @@
 # ftc installer — Windows x64.
 #
-#   irm https://raw.githubusercontent.com/cyberd4ch/free-torrent-cli/main/install.ps1 | iex
+#   irm https://raw.githubusercontent.com/cyberd4ch/footorrent/main/install.ps1 | iex
 #
 # Environment overrides:
 #   FTC_VERSION=v3.0.0   install a specific release (default: latest)
 $ErrorActionPreference = 'Stop'
 
-$repo = 'cyberd4ch/free-torrent-cli'
+$repo = 'cyberd4ch/footorrent'
 $version = if ($env:FTC_VERSION) { $env:FTC_VERSION } else { 'latest' }
 $base = if ($version -eq 'latest') {
     "https://github.com/$repo/releases/latest/download"

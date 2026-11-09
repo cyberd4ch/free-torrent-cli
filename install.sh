@@ -1,7 +1,7 @@
 #!/bin/sh
 # ftc installer — macOS and Linux.
 #
-#   curl -fsSL https://raw.githubusercontent.com/cyberd4ch/free-torrent-cli/main/install.sh | sh
+#   curl -fsSL https://raw.githubusercontent.com/cyberd4ch/footorrent/main/install.sh | sh
 #
 # Environment overrides:
 #   FTC_VERSION=v3.0.0   install a specific release (default: latest)
@@ -9,7 +9,7 @@
 #   FTC_NO_VERIFY=1      skip the SHA-256 check
 set -eu
 
-REPO="cyberd4ch/free-torrent-cli"
+REPO="cyberd4ch/footorrent"
 OS=$(uname -s)
 ARCH=$(uname -m)
 

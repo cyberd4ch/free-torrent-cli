@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description"
         content="Footorrent — a BitTorrent client in one ~3 MB Rust binary. From scratch: HTTP and UDP trackers, DHT, magnet metadata exchange, SHA-1 verification, seeding, plus a built-in web UI. No libtorrent, no Electron, no runtime." />
-    <meta property="og:title" content="Footorrent — free-torrent-cli" />
+    <meta property="og:title" content="Footorrent — small footprint. Big downloads." />
     <meta property="og:description"
         content="A BitTorrent client in a single ~3 MB binary. Rust, from scratch, no runtime to install." />
     <title>Footorrent — a BitTorrent client in 3 MB</title>
@@ -766,7 +766,7 @@
     <nav>
         <a href="#" class="nav-logo">
             <div class="nav-logo-mark"></div>
-            <span class="nav-logo-name">Footorrent<span>free-torrent-cli</span></span>
+            <span class="nav-logo-name">Footorrent<span>ftc</span></span>
         </a>
         <ul class="nav-links">
             <li><a href="#download">Download</a></li>
@@ -774,7 +774,7 @@
             <li><a href="#features">Features</a></li>
             <li><a href="./release-3.5.0.html">Release 3.5.0</a></li>
             <li>
-                <a href="https://github.com/cyberd4ch/free-torrent-cli" target="_blank" rel="noopener"
+                <a href="https://github.com/cyberd4ch/footorrent" target="_blank" rel="noopener"
                     class="nav-github">
                     <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
                         <path
@@ -812,7 +812,7 @@
                 </svg>
                 Download the binary
             </a>
-            <a href="https://github.com/cyberd4ch/free-torrent-cli" target="_blank" rel="noopener"
+            <a href="https://github.com/cyberd4ch/footorrent" target="_blank" rel="noopener"
                 class="btn-secondary">
                 <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
                     <path
@@ -824,7 +824,7 @@
 
         <div class="hero-oneshot">
             <span class="pill">macOS · Linux</span>
-            <code>curl -fsSL https://raw.githubusercontent.com/cyberd4ch/free-torrent-cli/main/install.sh | sh</code>
+            <code>curl -fsSL https://raw.githubusercontent.com/cyberd4ch/footorrent/main/install.sh | sh</code>
         </div>
 
         <div class="hero-stats">
@@ -873,7 +873,7 @@
                 </div>
                 <div class="platform-downloads">
                     <a class="download-btn"
-                        href="https://github.com/cyberd4ch/free-torrent-cli/releases/latest/download/ftc-macos-arm64.tar.gz">
+                        href="https://github.com/cyberd4ch/footorrent/releases/latest/download/ftc-macos-arm64.tar.gz">
                         <span class="download-btn-label">
                             <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
                                 <path
@@ -884,7 +884,7 @@
                         <span class="download-btn-size">1.3 MB</span>
                     </a>
                     <a class="download-btn"
-                        href="https://github.com/cyberd4ch/free-torrent-cli/releases/latest/download/ftc-macos-x86_64.tar.gz">
+                        href="https://github.com/cyberd4ch/footorrent/releases/latest/download/ftc-macos-x86_64.tar.gz">
                         <span class="download-btn-label">
                             <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
                                 <path
@@ -908,7 +908,7 @@
                 </div>
                 <div class="platform-downloads">
                     <a class="download-btn"
-                        href="https://github.com/cyberd4ch/free-torrent-cli/releases/latest/download/ftc-windows-x86_64.zip">
+                        href="https://github.com/cyberd4ch/footorrent/releases/latest/download/ftc-windows-x86_64.zip">
                         <span class="download-btn-label">
                             <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
                                 <path
@@ -932,7 +932,7 @@
                 </div>
                 <div class="platform-downloads">
                     <a class="download-btn"
-                        href="https://github.com/cyberd4ch/free-torrent-cli/releases/latest/download/ftc-linux-x86_64.tar.gz">
+                        href="https://github.com/cyberd4ch/footorrent/releases/latest/download/ftc-linux-x86_64.tar.gz">
                         <span class="download-btn-label">
                             <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
                                 <path
@@ -949,7 +949,7 @@
 
         <div class="checksum-note">
             Every release ships <a
-                href="https://github.com/cyberd4ch/free-torrent-cli/releases/latest/download/SHA256SUMS">SHA256SUMS</a>
+                href="https://github.com/cyberd4ch/footorrent/releases/latest/download/SHA256SUMS">SHA256SUMS</a>
             — verify before running:<br />
             <code>curl -LO …/releases/latest/download/SHA256SUMS &amp;&amp; shasum -a 256 -c SHA256SUMS --ignore-missing</code>
         </div>
@@ -977,7 +977,7 @@
                             <div class="step-title">Fetch the binary</div>
                             <div class="step-desc">One line, Apple silicon or Intel. It picks the right archive,
                                 verifies the checksum and puts <code>ftc</code> — plus the <code>footorrent</code> alias — on your PATH.</div>
-                            <div class="step-code">curl -fsSL https://raw.githubusercontent.com/cyberd4ch/free-torrent-cli/main/install.sh | sh</div>
+                            <div class="step-code">curl -fsSL https://raw.githubusercontent.com/cyberd4ch/footorrent/main/install.sh | sh</div>
                         </div>
                     </div>
                     <div class="install-step">
@@ -1009,7 +1009,7 @@
                             <div class="step-title">Fetch the executable</div>
                             <div class="step-desc">Portable executable, no MSI. The archive is checksum-verified
                                 before it is unpacked into your user profile.</div>
-                            <div class="step-code">irm https://raw.githubusercontent.com/cyberd4ch/free-torrent-cli/main/install.ps1 | iex</div>
+                            <div class="step-code">irm https://raw.githubusercontent.com/cyberd4ch/footorrent/main/install.ps1 | iex</div>
                         </div>
                     </div>
                     <div class="install-step">
@@ -1038,7 +1038,7 @@
                         <div class="step-content">
                             <div class="step-title">Install it</div>
                             <div class="step-desc">x86_64 glibc. The same script handles Linux and macOS.</div>
-                            <div class="step-code">curl -fsSL https://raw.githubusercontent.com/cyberd4ch/free-torrent-cli/main/install.sh | sh</div>
+                            <div class="step-code">curl -fsSL https://raw.githubusercontent.com/cyberd4ch/footorrent/main/install.sh | sh</div>
                         </div>
                     </div>
                     <div class="install-step">
@@ -1061,7 +1061,7 @@
                         <div class="step-num">4</div>
                         <div class="step-content">
                             <div class="step-title">Verify a checksum first, if you like</div>
-                            <div class="step-code">curl -LO https://github.com/cyberd4ch/free-torrent-cli/releases/latest/download/SHA256SUMS
+                            <div class="step-code">curl -LO https://github.com/cyberd4ch/footorrent/releases/latest/download/SHA256SUMS
 sha256sum -c SHA256SUMS --ignore-missing</div>
                         </div>
                     </div>
@@ -1160,15 +1160,15 @@ sha256sum -c SHA256SUMS --ignore-missing</div>
         <div class="footer-logo">footorrent</div>
         <ul class="footer-links">
             <li><a href="./release-3.5.0.html">3.5.0 release post</a></li>
-            <li><a href="https://github.com/cyberd4ch/free-torrent-cli" target="_blank" rel="noopener">GitHub</a></li>
-            <li><a href="https://github.com/cyberd4ch/free-torrent-cli/releases" target="_blank"
+            <li><a href="https://github.com/cyberd4ch/footorrent" target="_blank" rel="noopener">GitHub</a></li>
+            <li><a href="https://github.com/cyberd4ch/footorrent/releases" target="_blank"
                     rel="noopener">Releases</a></li>
-            <li><a href="https://github.com/cyberd4ch/free-torrent-cli/blob/main/CHANGELOG.md" target="_blank"
+            <li><a href="https://github.com/cyberd4ch/footorrent/blob/main/CHANGELOG.md" target="_blank"
                     rel="noopener">Changelog</a></li>
-            <li><a href="https://github.com/cyberd4ch/free-torrent-cli/issues" target="_blank" rel="noopener">Report a
+            <li><a href="https://github.com/cyberd4ch/footorrent/issues" target="_blank" rel="noopener">Report a
                     Bug</a></li>
-            <li><a href="https://github.com/cyberd4ch/free-torrent-cli/blob/main/LICENSE" target="_blank"
-                    rel="noopener">MIT License</a></li>
+            <li><a href="https://github.com/cyberd4ch/footorrent/blob/main/LICENSE" target="_blank"
+                    rel="noopener">GPL-3.0 License</a></li>
         </ul>
         <div class="footer-copy">
             © 2026 dach-a · written in Rust · no libtorrent · no Electron · no telemetry

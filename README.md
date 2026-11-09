@@ -4,14 +4,15 @@
 
 ### Small footprint. Big downloads.
 
-**A BitTorrent client in one ~3 MB binary.** `ftc` is the command; **Footorrent**
-is the product. The brand book is in [`BRAND.md`](BRAND.md).
+**The free, open-source BitTorrent client that fits in one ~3 MB binary.**
+`ftc` is the command; **Footorrent** is the product. The brand book is in [`BRAND.md`](BRAND.md).
 
 **Rust · from scratch · no libtorrent · no Electron · no runtime to install**
+**No ads · no bundles · no telemetry · no paid tier**
 
-[![Release](https://img.shields.io/github/v/release/cyberd4ch/free-torrent-cli?style=flat-square&color=orange&label=release)](https://github.com/cyberd4ch/free-torrent-cli/releases/latest)
-[![Tests](https://img.shields.io/github/actions/workflow/status/cyberd4ch/free-torrent-cli/test.yml?style=flat-square&label=tests)](https://github.com/cyberd4ch/free-torrent-cli/actions/workflows/test.yml)
-[![License](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](LICENSE)
+[![Release](https://img.shields.io/github/v/release/cyberd4ch/footorrent?style=flat-square&color=orange&label=release)](https://github.com/cyberd4ch/footorrent/releases/latest)
+[![Tests](https://img.shields.io/github/actions/workflow/status/cyberd4ch/footorrent/test.yml?style=flat-square&label=tests)](https://github.com/cyberd4ch/footorrent/actions/workflows/test.yml)
+[![License](https://img.shields.io/github/license/cyberd4ch/footorrent?style=flat-square&label=license)](LICENSE)
 ![Platforms](https://img.shields.io/badge/platforms-linux%20%7C%20macOS%20%7C%20windows-000000?style=flat-square)
 ![Binary](https://img.shields.io/badge/binary-~3%20MB-brightgreen?style=flat-square)
 
@@ -23,10 +24,47 @@ delegated to a C library, and nothing is downloaded at install time.
 
 ---
 
+## Why Footorrent
+
+The big torrent clients became the reason you need an alternative. µTorrent and
+BitTorrent grew into ad platforms — banner slots, bundled offers, upsells in the
+installer. qBittorrent and Deluge cleaned up the ethics but ship tens of
+megabytes of runtime for what is, underneath, one protocol. And closed-source
+clients ask you to trust a black box with your network activity.
+
+Footorrent is the same promise the small clients of the 2000s made, kept
+honestly:
+
+- **Free as in price and as in freedom.** [GPL-3.0-or-later](LICENSE) — the
+  same copyleft the rest of the torrent ecosystem relies on. No ads, no
+  bundles, no pro tier, no telemetry, and nobody — including this repo — can
+  ever take it closed. Any fork that ships Footorrent's code has to ship its
+  sources too.
+- **One ~3 MB binary.** A static build you can audit in an afternoon. There is
+  no libtorrent underneath, no Electron shell around it, no runtime to
+  download on first launch. Six crate dependencies in total; every protocol
+  byte is code in this repo.
+- **Works through a dead tracker list.** Magnets resolve peers via the DHT
+  alone, pull the real metadata off them and verify it against the info hash
+  before writing a single byte. And when a download stalls, `ftc swarm` tells
+  you the truth — dead swarm or broken client.
+- **A real interface in both directions.** A full CLI that renders progress in
+  place, and a local web UI that behaves like a download manager — same
+  engine, one binary.
+
+### Use it for things you're allowed to
+
+Footorrent is a tool. Linux ISOs, public-domain media, your own backups and
+distributed datasets are what the BitTorrent protocol was built for. What you
+download is up to you and your law; the GPL protects this program's freedom,
+not anyone's infringement. Nothing in the client phones home, ever.
+
+---
+
 ## Install
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/cyberd4ch/free-torrent-cli/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/cyberd4ch/footorrent/main/install.sh | sh
 ```
 
 Detects macOS or Linux and the CPU, downloads the matching archive, checks it
@@ -44,7 +82,7 @@ you want it, a window when you don't.
 
 ```powershell
 # Windows, in PowerShell
-irm https://raw.githubusercontent.com/cyberd4ch/free-torrent-cli/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/cyberd4ch/footorrent/main/install.ps1 | iex
 ```
 
 ### Or grab an archive
@@ -55,11 +93,11 @@ double-clicks into a text editor showing megabytes of binary.
 
 | Platform | Archive | Size |
 | :--- | :--- | ---: |
-| **macOS** app (Apple silicon) | [`ftc-macos-app.zip`](https://github.com/cyberd4ch/free-torrent-cli/releases/latest/download/ftc-macos-app.zip) | 1.4 MB |
-| **macOS** Apple silicon | [`ftc-macos-arm64.tar.gz`](https://github.com/cyberd4ch/free-torrent-cli/releases/latest/download/ftc-macos-arm64.tar.gz) | 1.3 MB |
-| **macOS** Intel | [`ftc-macos-x86_64.tar.gz`](https://github.com/cyberd4ch/free-torrent-cli/releases/latest/download/ftc-macos-x86_64.tar.gz) | 1.4 MB |
-| **Linux** x86_64 | [`ftc-linux-x86_64.tar.gz`](https://github.com/cyberd4ch/free-torrent-cli/releases/latest/download/ftc-linux-x86_64.tar.gz) | 1.4 MB |
-| **Windows** x86_64 | [`ftc-windows-x86_64.zip`](https://github.com/cyberd4ch/free-torrent-cli/releases/latest/download/ftc-windows-x86_64.zip) | 1.2 MB |
+| **macOS** app (Apple silicon) | [`ftc-macos-app.zip`](https://github.com/cyberd4ch/footorrent/releases/latest/download/ftc-macos-app.zip) | 1.4 MB |
+| **macOS** Apple silicon | [`ftc-macos-arm64.tar.gz`](https://github.com/cyberd4ch/footorrent/releases/latest/download/ftc-macos-arm64.tar.gz) | 1.4 MB |
+| **macOS** Intel | [`ftc-macos-x86_64.tar.gz`](https://github.com/cyberd4ch/footorrent/releases/latest/download/ftc-macos-x86_64.tar.gz) | 1.5 MB |
+| **Linux** x86_64 | [`ftc-linux-x86_64.tar.gz`](https://github.com/cyberd4ch/footorrent/releases/latest/download/ftc-linux-x86_64.tar.gz) | 1.5 MB |
+| **Windows** x86_64 | [`ftc-windows-x86_64.zip`](https://github.com/cyberd4ch/footorrent/releases/latest/download/ftc-windows-x86_64.zip) | 1.3 MB |
 
 ```bash
 tar xzf ftc-macos-arm64.tar.gz      # ftc arrives as mode 0755
@@ -71,11 +109,11 @@ Expand-Archive ftc-windows-x86_64.zip -DestinationPath .
 .\ftc.exe --version
 ```
 
-Every release also ships [`SHA256SUMS`](https://github.com/cyberd4ch/free-torrent-cli/releases/latest/download/SHA256SUMS).
+Every release also ships [`SHA256SUMS`](https://github.com/cyberd4ch/footorrent/releases/latest/download/SHA256SUMS).
 Verify before you run it:
 
 ```bash
-curl -LO https://github.com/cyberd4ch/free-torrent-cli/releases/latest/download/SHA256SUMS
+curl -LO https://github.com/cyberd4ch/footorrent/releases/latest/download/SHA256SUMS
 shasum -a 256 -c SHA256SUMS --ignore-missing      # linux: sha256sum -c
 ```
 
@@ -110,6 +148,11 @@ A magnet with no tracker still works: it hunts peers through the DHT, fetches
 the `info` dictionary from them (BEP 9/10), and verifies it against the info
 hash before writing a single byte.
 
+Adding a magnet from the web UI is deliberate on purpose: step one contacts the
+swarm and confirms what it actually is — real name, exact byte size, piece
+count and file list — step two asks where it should go, and only then does
+anything touch disk.
+
 ### Is the swarm dead, or is the client stuck?
 
 ```bash
@@ -133,14 +176,15 @@ ftc serve --limit 2M             # default cap for every job added from the page
 
 The same engine behind a local download manager: categories with live counts, a
 sortable table (size, progress, speed, time left, peers, status, age), multi-select
-with Start/Pause/Stop/Retry/Remove, an add sheet that queues several links at once
-and can start them paused, preferences for the default folder and cap, search, a
-details pane, a right-click menu and keyboard shortcuts. Drop a `.torrent` file
+with Start/Pause/Stop/Retry/Remove, an add sheet that confirms a magnet before it
+can write anything, failed jobs carrying a Retry button and a **Copy infohash**
+action, and per-peer rates in the details pane. Drop a `.torrent` file
 anywhere on the page or a magnet link, and it queues; Tools clears finished jobs,
 exports the list as JSON and copies every path, the sidebar keeps a 60-second speed
 graph, and Preferences can send a desktop notification when a download finishes or
-fails. The HTML, CSS and JS are compiled into the binary — no extra dependency, no
-second process — and it binds loopback only unless you ask for `--bind`.
+fails, and can set the default folder and cap. The HTML, CSS and JS are compiled
+into the binary — no extra dependency, no second process — and it binds loopback
+only unless you ask for `--bind`.
 
 Underneath it is a small JSON API, form-encoded on the way in:
 
@@ -149,6 +193,8 @@ Underneath it is a small JSON API, form-encoded on the way in:
 | `GET /api/state` | every job with live counters, session totals and the current settings |
 | `GET`/`POST /api/settings` | default folder (`output=`) and cap (`limit=`, `none` clears it) |
 | `POST /api/add` | `target=<magnet or path>&output=<dir>&limit=<rate>&paused=1` |
+| `POST /api/resolve` | two-step magnets: contact the swarm, return name, size, piece count, file list and an add token |
+| `POST /api/start` | `token=<resolve token>&output=<dir>&limit=<rate>` — begin the confirmed download |
 | `POST /api/add-torrent` | a dropped file: `name=<file>&data=<base64>&output=<dir>&limit=<rate>` |
 | `POST /api/pause` / `resume` | `id=<job>`, `ids=1,2,3` or `all=1` |
 | `POST /api/cancel` | `id=<job>`, `ids=1,2,3` or `all=1` |
@@ -158,7 +204,9 @@ Underneath it is a small JSON API, form-encoded on the way in:
 
 Jobs report the engine's own `Arc<Progress>` atomics, so the page and the
 progress bar in your terminal can never disagree. Pause parks the workers without
-touching verified progress; resume continues from the same queue.
+touching verified progress; resume continues from the same queue. Pause and Stop
+land between 16 KiB blocks, not at the end of a piece, so the UI reads the truth
+in real time.
 
 `ftc gui` (and `ftc serve --open`) opens the page for you and defaults downloads
 to `~/Downloads`, because a double-clicked launcher has no useful working
@@ -175,9 +223,10 @@ than silently ignored.
 | | |
 | :--- | :--- |
 | **No runtime.** Static binary. No Node, no Python, no JVM, no Electron download on first launch. | **No libtorrent.** Bencode, trackers, wire protocol, DHT and seeding are this repo's code. |
-| **Resumable.** Existing pieces are re-verified on disk, so a restart continues instead of redownloading. | **Honest seeding.** The Bitfield is built from verified pieces only — it never claims a piece it can't prove. |
-| **Multi-file torrents.** Crosses file boundaries without stitching buffers. | **Safe paths.** `..`, absolute paths and separators are rejected before any file is opened. |
+| **No ads, no bundles, no telemetry.** The protocol stack talks to trackers, DHT peers and nothing else. | **Honest seeding.** The Bitfield is built from verified pieces only — it never claims a piece it can't prove. |
+| **Resumable.** Existing pieces are re-verified on disk, so a restart continues instead of redownloading. | **Multi-file torrents.** Crosses file boundaries without stitching buffers. |
 | **A real speed cap.** `--limit 2M` is one shared token bucket, so the number is the aggregate across peers — not a per-connection trickle. | **Pause and resume.** Workers park between blocks; verified pieces are never downloaded twice. |
+| **Safe paths.** `..`, absolute paths and separators are rejected before any file is opened. | **Capped frames.** Peer messages cannot exhaust memory — sound from the first packet. |
 
 ## Protocol coverage
 
@@ -196,6 +245,7 @@ than silently ignored.
 | DHT (BEP 5) — `get_peers` hunting and announce | ✅ |
 | Seeding (`--seed`) | ✅ |
 | Web UI + local JSON API (`ftc serve`) | ✅ |
+| Two-step magnet adds (resolve + confirm + start) | ✅ |
 | Pause / resume / stop / retry from the page, engine-side | ✅ |
 | Swarm diagnostics (`ftc swarm`) — trackers, DHT, TCP reachability | ✅ |
 | Download rate limit (`--limit`, per-job `limit`) | ✅ |
@@ -203,7 +253,7 @@ than silently ignored.
 ## How it's built
 
 ```
-crates/core     the engine, as a library
+crates/core     the engine, as a library ftc-core
   bencode.rs    encoder/decoder; records raw info-dict bytes for hashing
   torrent.rs    metainfo, piece table, file layout, sanitised paths
   magnet.rs     magnet URIs, hex and base32 info hashes
@@ -220,7 +270,9 @@ crates/cli      the `ftc` binary — argument parsing, progress rendering
 ```
 
 Six dependencies in total (`sha1`, `hex`, `rand`, `ureq`, `base32`,
-`percent-encoding`). No async runtime: a worker thread per peer.
+`percent-encoding`). No async runtime: a worker thread per peer. The crates
+keep their `free-torrent-cli` / `ftc-core` names so nothing anyone typed
+before stops working — `BRAND.md` is the contract for which names are which.
 
 Decisions worth knowing:
 
@@ -235,11 +287,12 @@ Decisions worth knowing:
 
 ## Build from source
 
-Rust 1.75+ (an MSRV-pinned `rust-toolchain.toml` is included):
+Rust stable (the included `rust-toolchain.toml` pins the stable toolchain with
+`clippy` and `rustfmt`; edition 2021):
 
 ```bash
-git clone https://github.com/cyberd4ch/free-torrent-cli
-cd free-torrent-cli
+git clone https://github.com/cyberd4ch/footorrent
+cd footorrent
 cargo build --release        # target/release/ftc
 ```
 
@@ -257,6 +310,20 @@ the session downloads, verifies and writes it; a fake router → holder chain ov
 UDP exercises a full DHT hunt and a token-validated announce; a fake leecher
 pulls one block from the seeder and is dropped for asking beyond the torrent.
 
+## Contributing
+
+Issues and pull requests are welcome. A few ground rules that keep the project
+small and yours to trust:
+
+- `cargo test --all && cargo clippy --all-targets -- -D warnings && cargo fmt --all -- --check`
+  must pass — CI runs the same gate.
+- New transports or features should fail soft: a dead tracker or a hostile peer
+  is data, not a crash.
+- No new runtime dependencies unless the protocol truly needs them; the six
+  existing ones are a design decision, not an accident.
+- Contributed code arrives under GPL-3.0-or-later — that is how the client
+  stays free for the next person too.
+
 ## Roadmap
 
 1. A native Windows front end on the same local JSON API (the macOS app already
@@ -264,4 +331,20 @@ pulls one block from the seeder and is dropped for asking beyond the torrent.
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+Footorrent is free software under the
+**[GNU GPL v3.0-or-later](LICENSE)** — copyright © 2025–2026 dach-a.
+
+That means:
+
+- **You can use it for anything, forever, at $0.**
+- **You can read, modify and redistribute it** — and your forks must carry the
+  same GPL grant and release their source, which is exactly how this client
+  stays auditable and ad-free instead of becoming another installer with
+  offers in it.
+- **No hidden terms.** There is no EULA, seat limit or "premium" waiting
+  behind the first-run dialog; the ban on bundling is structural — a fork with
+  ads still owes you its code.
+
+The torrent-client ecosystem is one of open licensing's success stories
+(Transmission, qBittorrent, Deluge, rTorrent all ship under GPL licenses).
+Footorrent joins that lineage rather than leaving it.

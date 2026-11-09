@@ -54,7 +54,7 @@ jobs:
           set -euo pipefail
           tag="${INPUT_TAG:-${EVENT_TAG:-$RUN_TAG}}"
           if [ -z "$tag" ]; then
-            tag="$(curl -fsSL https://api.github.com/repos/cyberd4ch/free-torrent-cli/releases/latest \
+            tag="$(curl -fsSL https://api.github.com/repos/cyberd4ch/footorrent/releases/latest \
               | python3 -c 'import json,sys; print(json.load(sys.stdin)["tag_name"])')"
           fi
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
@@ -67,7 +67,7 @@ jobs:
           ASSET: ${{ matrix.asset }}
         run: |
           set -euo pipefail
-          base="https://github.com/cyberd4ch/free-torrent-cli/releases/download/$TAG"
+          base="https://github.com/cyberd4ch/footorrent/releases/download/$TAG"
           mkdir -p pkg
           curl -fsSL -o "pkg/$ASSET" "$base/$ASSET"
           curl -fsSL -o pkg/SHA256SUMS "$base/SHA256SUMS"

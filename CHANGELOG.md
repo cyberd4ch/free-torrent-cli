@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- **License: GPL-3.0-or-later.** MIT's hand-everyone-the-code permission didn't
+  fit a project whose point is to stay free: Footorrent now ships under the
+  same copyleft the rest of the torrent-client ecosystem uses, so anyone who
+  builds a fork or an app on `ftc-core` has to release their sources too.
+  `LICENSE` carries the canonical GPL-3 text, and no other term was added on
+  top of it.
+- **The repository front door matches the product.** The README is rewritten
+  as the pitch it should have been: the free, open-source BitTorrent client —
+  why it exists next to the ad-funded clients, what the GPL protects, a
+  use-it-legally note and how to contribute. GitHub links in the installers,
+  the docs pages and CI now point at the `footorrent` repo instead of the old
+  `free-torrent-cli` slug (they worked through GitHub's rename redirect until
+  now), while the crate and archive names keep their `free-torrent-cli` /
+  `ftc` identity as `BRAND.md` promises.
+
 ## [3.5.0] - 2026-11-09
 
 ### Added

@@ -5,7 +5,7 @@ members = ["crates/core", "crates/cli"]
 [workspace.package]
 version = "3.5.0"
 edition = "2021"
-license = "MIT"
+license = "GPL-3.0-or-later"
 
 [workspace.dependencies]
 sha1 = "0.10"
