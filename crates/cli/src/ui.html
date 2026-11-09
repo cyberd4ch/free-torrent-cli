@@ -51,7 +51,7 @@
         .peers h4 { margin: 0 0 8px; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
         .peers-empty { margin: 0; color: var(--dim); }
         .peer-list { display: grid; gap: 2px; max-height: 190px; overflow: auto; }
-        .peer-row { display: grid; grid-template-columns: 1fr 82px 72px; gap: 8px; padding: 3px 0; font-size: 12px;            border-bottom: 1px solid rgba(210, 197, 174, .8); }
+        .peer-row { display: grid; grid-template-columns: 1fr 76px 66px 72px; gap: 8px; padding: 3px 0; font-size: 12px;            border-bottom: 1px solid rgba(210, 197, 174, .8); }
         .peer-state { color: var(--muted); }
         .peer-state.connecting { color: var(--warn); }
         .peer-state.idle { color: var(--ok); }
@@ -729,6 +729,7 @@
                 <label class="inline"><input type="checkbox" id="add-paused" /> Start paused</label>
             </div>
             <p class="form-error" id="add-error"></p>
+            <button type="button" class="btn" id="add-retry" hidden>Retry failed</button>
             <footer>
                 <button type="button" class="btn" data-close>Cancel</button>
                 <button type="submit" class="btn primary">Add download</button>
@@ -1226,7 +1227,19 @@
                     const delivered = document.createElement("span");
                     delivered.className = "num";
                     delivered.textContent = peer.bytes ? bytes(peer.bytes) : "—";
-                    row.append(address, state, delivered);
+                    const key = `${job.id}:${peer.address}`;
+                    const now = Date.now();
+                    app.peerRates ||= new Map();
+                    const before = app.peerRates.get(key);
+                    const rate = document.createElement("span");
+                    rate.className = "num";
+                    rate.textContent = "—";
+                    if (before && now - before.at > 400 && peer.bytes >= before.bytes) {
+                        const perSecond = (peer.bytes - before.bytes) / ((now - before.at) / 1000);
+                        if (perSecond > 0) rate.textContent = `${bytes(perSecond)}/s`;
+                    }
+                    app.peerRates.set(key, { bytes: peer.bytes, at: now });
+                    row.append(address, state, delivered, rate);
                     list.append(row);
                 }
                 section.append(list);
@@ -1567,6 +1580,9 @@
                 ["Files", String(files)],
                 ["Peers", String(peers)],
             ];
+            if (batch.some((item) => item.fallback_trackers)) {
+                facts.push(["Trackers", "own list did not answer — used public trackers"]);
+            }
             if (batch.length === 1) facts.push(["Info hash", `${batch[0].info_hash.slice(0, 16)}…`]);
             confirmFacts(facts);
             $("#confirm-output").value = app.settings.output || "";
@@ -1623,6 +1639,7 @@
 
         function openAdd() {
             $("#add-error").textContent = "";
+            $("#add-retry").hidden = true;
             $("#add-output").value = app.settings.output || "";
             $("#add-limit").value = app.settings.limit ? `${Math.round(app.settings.limit / 1024)}k` : "";
             addDialog.showModal();
@@ -1669,16 +1686,25 @@
             try {
                 const batch = [];
                 const failures = [];
+                const failed = [];
                 for (const target of targets) {
                     try {
                         batch.push(await api("/api/resolve", { target, output }));
                     } catch (failure) {
+                        failed.push(target);
                         failures.push(`${target.length > 46 ? `${target.slice(0, 46)}…` : target}: ${failure.message}`);
                     }
                 }
                 if (failures.length) {
                     error.textContent = failures.slice(0, 3).join("\n");
-                    if (!batch.length) return;
+                    if (!batch.length) {
+                        // Keep the links that failed so one click can try again
+                        // without digging the magnet back out of the clipboard.
+                        $("#add-targets").value = failed.join("\n");
+                        $("#add-retry").hidden = false;
+                        return;
+                    }
+                    toast(failures[0], true);
                 }
                 addDialog.close();
                 $("#add-targets").value = "";
@@ -1688,6 +1714,11 @@
                 submit.disabled = false;
                 say("ready");
             }
+        });
+
+        $("#add-retry").addEventListener("click", () => {
+            $("#add-retry").hidden = true;
+            $("#add-form").requestSubmit();
         });
 
         $("#settings-form").addEventListener("submit", async (event) => {

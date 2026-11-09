@@ -203,6 +203,9 @@ pub struct Resolved {
     pub info: Vec<u8>,
     /// Peers the swarm offered, whether or not they served the metadata.
     pub peers: Vec<SocketAddr>,
+    /// True when the magnet's own announce list produced no peer, so the
+    /// well-known public trackers had to be used instead.
+    pub fallback_trackers: bool,
 }
 
 pub fn fetch(
@@ -298,6 +301,7 @@ pub fn fetch_all(
 
     let mut peers = Vec::new();
     let mut errors = Vec::new();
+    let mut fallback_trackers = false;
     let request = AnnounceRequest::new(*info_hash, *peer_id, 0, METADATA_PIECE as u64);
     // Ask every tracker at once. Asking them in turn let one 403 or one silent
     // UDP tracker eat the shared budget, so later trackers never got a turn and
@@ -316,6 +320,7 @@ pub fn fetch_all(
             .map(|url| (*url).to_string())
             .collect();
         if !extra.is_empty() {
+            fallback_trackers = true;
             eprintln!(
                 "no peers from {} magnet tracker(s) — trying {} public tracker(s)",
                 trackers.len(),
@@ -365,6 +370,7 @@ pub fn fetch_all(
                         return Ok(Resolved {
                             info,
                             peers: peers.clone(),
+                            fallback_trackers,
                         })
                     }
                     Ok((peer, Err(err))) => {

@@ -16,7 +16,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and a token; `POST /api/start` takes the token plus the folder.
 - **Live peer connections.** Every job carries its discovered peers with a
   state (`idle`, `connecting`, `failed`) and the bytes that peer delivered, in
-  `peer_list` on `/api/state` and in the details pane.
+  `peer_list` on `/api/state` and in the details pane, now with a live rate
+  per peer.
+- **Retry a failed magnet.** A resolve that fails keeps the links that failed
+  in the add dialog and offers a Retry button, and the confirmation step says
+  when a magnet's own announce list was dead and public trackers were used.
 - **Brand: Footorrent.** Mark, wordmark, palette and voice in `BRAND.md` and
   `assets/brand/`; the window, page title, favicon and app bundle now use them.
 

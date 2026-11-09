@@ -705,7 +705,7 @@ fn resolve_target(state: &Arc<State>, body: &str) -> (u16, &'static str, Vec<u8>
         return bad("missing target");
     };
 
-    let (torrent, peers) = if target.starts_with("magnet:") {
+    let (torrent, peers, fallback) = if target.starts_with("magnet:") {
         let link = match magnet::parse(&target) {
             Ok(link) => link,
             Err(err) => return bad(&err.to_string()),
@@ -722,8 +722,9 @@ fn resolve_target(state: &Arc<State>, body: &str) -> (u16, &'static str, Vec<u8>
             Err(err) => return bad(&format!("metadata exchange failed: {err}")),
         };
         let peers = fetched.peers.clone();
+        let fallback = fetched.fallback_trackers;
         match Torrent::from_info(&fetched.info, &link.trackers) {
-            Ok(torrent) => (torrent, peers),
+            Ok(torrent) => (torrent, peers, fallback),
             Err(err) => return bad(&err.to_string()),
         }
     } else {
@@ -732,19 +733,20 @@ fn resolve_target(state: &Arc<State>, body: &str) -> (u16, &'static str, Vec<u8>
             Err(err) => return bad(&format!("cannot read {target}: {err}")),
         };
         match Torrent::parse(&bytes) {
-            Ok(torrent) => (torrent, Vec::new()),
+            Ok(torrent) => (torrent, Vec::new(), false),
             Err(err) => return bad(&err.to_string()),
         }
     };
 
     let token = state.next_id.fetch_add(1, Ordering::Relaxed);
     let body = format!(
-        "{{\"token\":{token},\"name\":\"{}\",\"total\":{},\"pieces\":{},\"peers\":{},\
+        "{{\"token\":{token},\"name\":\"{}\",\"total\":{},\"pieces\":{},\"peers\":{},\"fallback_trackers\":{},\
          \"info_hash\":\"{}\",\"files\":{}}}",
         http::json_escape(&torrent.name),
         torrent.total_length,
         torrent.piece_count(),
         peers.len(),
+        fallback,
         hex::encode(torrent.info_hash),
         files_json(&torrent)
     );
