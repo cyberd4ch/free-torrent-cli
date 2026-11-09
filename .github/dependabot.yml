@@ -1,8 +1,9 @@
 version: 2
 
 updates:
-  # Six direct crates plus the lockfile transitive set; one grouped PR keeps
-  # the noise down while still surfacing advisories every week.
+  # Patch-level Cargo updates only. The first grouped PR proved why: one batch
+  # carried rand 0.9, base32 0.5, ureq 3 and sha1 0.11+, all of which rename or
+  # remove APIs this code uses. Minor bumps here are a migration, not a merge.
   - package-ecosystem: cargo
     directory: /
     schedule:
@@ -12,9 +13,11 @@ updates:
       timezone: Etc/UTC
     open-pull-requests-limit: 5
     groups:
-      rust-dependencies:
+      rust-patches:
         patterns:
           - "*"
+        update-types:
+          - patch
 
   - package-ecosystem: github-actions
     directory: /
