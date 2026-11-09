@@ -34,9 +34,11 @@ against `SHA256SUMS`, and puts `ftc` on your PATH — `/usr/local/bin` when that
 writable, `~/.local/bin` otherwise. No toolchain, no runtime, no sudo unless you
 ask for it.
 
-On macOS it also installs **a real app**: `~/Applications/Footorrent.app`, a WKWebView
-window (87 KB of Swift, `gui/macos/main.swift`) that starts the server itself and
-quits it when you close the window. Released as `ftc-macos-app.zip`. On Windows
+On macOS it also installs **a real app**: `~/Applications/Footorrent.app`, a native
+Rune window (`gui/rune`, GPU-rendered) hosted by a small Swift launcher
+(`gui/macos/main.swift`) that starts the server itself and quits it when the
+window closes. Bundles without `footorrent-gui` keep the web view. Released as
+`ftc-macos-app.zip`. On Windows
 the installer adds a Start Menu entry and on Linux a `ftc.desktop` file, both
 running `ftc gui`. One installed binary, both interfaces: the command line when
 you want it, a window when you don't.

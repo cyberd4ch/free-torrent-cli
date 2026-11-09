@@ -19,6 +19,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `peer_list` on `/api/state` and in the details pane.
 - **Brand: Footorrent.** Mark, wordmark, palette and voice in `BRAND.md` and
   `assets/brand/`; the window, page title, favicon and app bundle now use them.
+- **A native Rune window.** `gui/rune` draws the download manager with Rune's
+  GPU renderer over the same local API: live jobs, progress, peers, speed and
+  Start/Pause/Stop/Remove. The macOS bundle launches it when `footorrent-gui`
+  sits beside `ftc`, and falls back to the web view for plain `ftc` installs.
+  It never claims the engine is live before the first reply.
+
+### Changed
+
+- **Warm blue on warm off-white.** The page and the native window share one
+  palette: deep warm-blue actions on an off-white ground, with the ember
+  footprint kept as the brand mark.
 
 ### Fixed
 

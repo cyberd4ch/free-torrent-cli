@@ -1,3 +1,9 @@
 /target
 **/*.rs.bk
 .DS_Store
+
+# Rune window build output
+gui/rune/target
+
+# Rune window build output
+gui/rune/target
