@@ -52,6 +52,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   averages, so a paused or cancelled job still looked like live traffic. Speed
   is now zero unless the job is downloading, and the graph clears when the list
   is emptied.
+- **Leftover `ftc` names in the window.** Notifications, the exported JSON file,
+  the offline message and the docs version chips now say Footorrent; the
+  command itself stays `ftc`, which is what the installers put on PATH.
 - **Healthy peers were rejected during metadata exchange.** A peer that sent a
   bitfield or an unchoke before its extension handshake was treated as not
   supporting `ut_metadata`, so magnets failed against ordinary clients even

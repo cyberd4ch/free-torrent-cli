@@ -824,7 +824,7 @@
             updated: 0,
             history: [],
             statuses: new Map(),
-            notify: localStorage.getItem("ftc.notify") === "1",
+            notify: (localStorage.getItem("footorrent.notify") ?? localStorage.getItem("ftc.notify")) === "1",
         };
 
         /* ---------- formatting ---------- */
@@ -1453,7 +1453,7 @@
             );
             const link = document.createElement("a");
             link.href = URL.createObjectURL(new Blob([data], { type: "application/json" }));
-            link.download = "ftc-downloads.json";
+            link.download = "footorrent-downloads.json";
             link.click();
             setTimeout(() => URL.revokeObjectURL(link.href), 2000);
             toast("Exported the download list");
@@ -1476,7 +1476,7 @@
             toast(message);
             if (!app.notify || !("Notification" in window) || Notification.permission !== "granted") return;
             try {
-                new Notification(job.name || "ftc", { body: message, tag: `ftc-${job.id}` });
+                new Notification(job.name || "Footorrent", { body: message, tag: `footorrent-${job.id}` });
             } catch {
                 // The toast already delivered the news.
             }
@@ -1741,7 +1741,8 @@
                     }
                 }
                 app.notify = allowed;
-                localStorage.setItem("ftc.notify", allowed ? "1" : "0");
+                localStorage.setItem("footorrent.notify", allowed ? "1" : "0");
+                localStorage.removeItem("ftc.notify");
 
                 settingsDialog.close();
                 toast("Preferences saved");
@@ -1898,7 +1899,7 @@
                 app.reachable = true;
             } catch {
                 app.reachable = false;
-                say("server unreachable — is ftc still running?");
+                say("server unreachable — is Footorrent still running?");
             }
             render();
         }
