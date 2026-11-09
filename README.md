@@ -7,7 +7,6 @@
 ### Small footprint. Big downloads.
 
 **The free, open-source BitTorrent client that fits in one ~3 MB binary.**
-**`ftc`** is the command; **Footorrent** is the product.
 
 **Rust · from scratch · no libtorrent · no Electron · no runtime to install**
 **No ads · no bundles · no telemetry · no paid tier**
@@ -35,33 +34,6 @@ installer. qBittorrent and Deluge cleaned up the ethics but ship tens of
 megabytes of runtime for what is, underneath, one protocol. And closed-source
 clients ask you to trust a black box with your network activity.
 
-Footorrent is the same promise the small clients of the 2000s made, kept
-honestly:
-
-- **Free as in price and as in freedom.** [GPL-3.0-or-later](LICENSE) — the
-  same copyleft the rest of the torrent ecosystem relies on. No ads, no
-  bundles, no pro tier, no telemetry, and nobody — including this repo — can
-  ever take it closed. Any fork that ships Footorrent's code has to ship its
-  sources too.
-- **One ~3 MB binary.** Small enough to audit in an afternoon. There is no
-  libtorrent underneath, no Electron shell around it, no runtime to download
-  on first launch. Every protocol byte — bencode, trackers, DHT, the wire
-  protocol, seeding — is code in this repo.
-- **Works through a dead tracker list.** Magnets resolve peers via the DHT
-  alone, pull the real metadata off them and verify it against the info hash
-  before writing a single byte. And when a download stalls, `ftc swarm` tells
-  you the truth — dead swarm or broken client.
-- **A real interface in both directions.** A full CLI that renders progress in
-  place, and a local web UI that behaves like a download manager — same
-  engine, one binary.
-
-### Use it for things you're allowed to
-
-Footorrent is a tool. Linux ISOs, public-domain media, your own backups and
-distributed datasets are what the BitTorrent protocol was built for. What you
-download is up to you and your law; the GPL protects this program's freedom,
-not anyone's infringement. Nothing in the client phones home, ever.
-
 ---
 
 ## What it looks like
@@ -76,8 +48,6 @@ The bar fills with the same gradient the GUI uses, counts real peers, and
 finishes with a quiet checkmark.
 
 ![The terminal progress bar filling to a green done over 20 seconds](assets/demo/terminal-download.gif)
-
-*(A sharper, scrubbable [video version](assets/demo/terminal-download.mp4) is in the repo too.)*
 
 The capture above honors a `--limit 6M` cap, so the clock is honest: **5.9 MB/s
 steady, 120 MB in about 20 seconds**. Uncapped against a fast seed, the same
@@ -354,19 +324,4 @@ small and yours to trust:
 ## License
 
 Footorrent is free software under the
-**[GNU GPL v3.0-or-later](LICENSE)** — copyright © 2025–2026 dach-a.
-
-That means:
-
-- **You can use it for anything, forever, at $0.**
-- **You can read, modify and redistribute it** — and your forks must carry the
-  same GPL grant and release their source, which is exactly how this client
-  stays auditable and ad-free instead of becoming another installer with
-  offers in it.
-- **No hidden terms.** There is no EULA, seat limit or "premium" waiting
-  behind the first-run dialog; the ban on bundling is structural — a fork with
-  ads still owes you its code.
-
-The torrent-client ecosystem is one of open licensing's success stories
-(Transmission, qBittorrent, Deluge, rTorrent all ship under GPL licenses).
-Footorrent joins that lineage rather than leaving it.
+**[GNU GPL v3.0-or-later](LICENSE)** — copyright © 2025–2026 cyberdach.
