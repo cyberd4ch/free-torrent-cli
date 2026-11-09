@@ -1658,25 +1658,36 @@
             const limit = $("#add-limit").value.trim();
             const paused = $("#add-paused").checked ? "1" : "";
 
+            const submit = $("#add-form button[type=submit]");
+
             // Step one: resolve every target. This talks to the swarm and gives
-            // us the real name and byte size before anything is written.
-            const batch = [];
-            const failures = [];
-            for (const target of targets) {
-                try {
-                    batch.push(await api("/api/resolve", { target, output }));
-                } catch (failure) {
-                    failures.push(`${target.length > 46 ? `${target.slice(0, 46)}…` : target}: ${failure.message}`);
+            // us the real name and byte size before anything is written. A
+            // healthy swarm answers in seconds; a hard one can take a minute, so
+            // the button and status line show that work is happening.
+            submit.disabled = true;
+            say("contacting the swarm for metadata…");
+            try {
+                const batch = [];
+                const failures = [];
+                for (const target of targets) {
+                    try {
+                        batch.push(await api("/api/resolve", { target, output }));
+                    } catch (failure) {
+                        failures.push(`${target.length > 46 ? `${target.slice(0, 46)}…` : target}: ${failure.message}`);
+                    }
                 }
+                if (failures.length) {
+                    error.textContent = failures.slice(0, 3).join("\n");
+                    if (!batch.length) return;
+                }
+                addDialog.close();
+                $("#add-targets").value = "";
+                $("#add-paused").checked = false;
+                askDestination(batch, { limit, paused });
+            } finally {
+                submit.disabled = false;
+                say("ready");
             }
-            if (failures.length) {
-                error.textContent = failures.slice(0, 3).join("\n");
-                if (!batch.length) return;
-            }
-            addDialog.close();
-            $("#add-targets").value = "";
-            $("#add-paused").checked = false;
-            askDestination(batch, { limit, paused });
         });
 
         $("#settings-form").addEventListener("submit", async (event) => {

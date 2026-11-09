@@ -38,6 +38,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   when the swarm was fine. Both metadata loops now ignore routine wire chatter,
   and our handshake sets the BEP 10 extension bit so peers actually answer with
   their extension handshake.
+- **Magnet metadata replies were ignored.** BEP 10 has each side advertise the
+  extension id the *other* must use; replies to our requests arrive under our
+  advertised id (1), but the loop waited for the peer's id (often 3) and threw
+  every reply away. Real swarms therefore never delivered metadata, so magnets
+  could not be added even when peers and trackers were healthy. The window now
+  shows "contacting the swarm for metadata…" while it waits, instead of looking
+  frozen.
+- **Downloads stalled at zero against ordinary peers.** With BEP 10 advertised,
+  a peer sends its extension handshake before its unchoke, and the piece worker
+  treated that as a fatal message, so every healthy peer was dropped before the
+  first byte. It now ignores extension and port chatter while waiting.
 
 ## [3.4.1] - 2026-11-09
 

@@ -16,6 +16,11 @@ use std::time::{Duration, Instant};
 pub const METADATA_PIECE: usize = 16 * 1024;
 const MAX_METADATA: usize = 8 * 1024 * 1024;
 const UT_METADATA: &[u8] = b"ut_metadata";
+/// The extension id we advertise for messages peers send *to us*. BEP 10 has
+/// each side pick the id the other must use, so replies to our metadata
+/// requests arrive under this id — not under the peer's advertised id, which is
+/// the id we must use when sending requests to them.
+const OUR_METADATA_ID: u8 = 1;
 /// Waiting time for one trackerless-magnet DHT hunt.
 const DHT_HUNT: Duration = Duration::from_secs(15);
 /// Upper bound on one metadata resolution, across every peer we try.
@@ -31,7 +36,10 @@ pub fn extension_handshake(port: u16) -> Vec<u8> {
     bencode::encode(&Value::Dict(vec![
         (
             b"m".to_vec(),
-            Value::Dict(vec![(UT_METADATA.to_vec(), Value::Int(1))]),
+            Value::Dict(vec![(
+                UT_METADATA.to_vec(),
+                Value::Int(OUR_METADATA_ID as i64),
+            )]),
         ),
         (b"v".to_vec(), Value::Bytes(b"ftc 3.0".to_vec())),
         (b"reqq".to_vec(), Value::Int(64)),
@@ -119,7 +127,7 @@ pub fn fetch_from_peer(
         )?;
         loop {
             match peer::read_message(&mut stream)? {
-                Message::Extended(id, payload) if id == ut_id => {
+                Message::Extended(id, payload) if id == OUR_METADATA_ID || id == ut_id => {
                     let (header, used) = bencode::decode_prefix(&payload)?;
                     let kind = header.get("msg_type").and_then(Value::as_int).unwrap_or(-1);
                     if kind == 2 {
@@ -285,9 +293,11 @@ pub fn fetch_all(
     loop {
         let end = (tried + 30).min(peers.len());
         for peer in peers[tried..end].iter() {
+            // A sliver under a second would round to a "0s" timeout and report
+            // that nonsense instead of saying the budget ran out.
             let left = deadline.saturating_duration_since(Instant::now());
-            if left.is_zero() {
-                errors.push("metadata deadline reached".into());
+            if left < Duration::from_secs(1) {
+                errors.push("no peer answered within the 120 s metadata budget".into());
                 break;
             }
             match fetch_peer_bounded(*peer, info_hash, peer_id, port, left.min(PEER_TIMEOUT)) {
@@ -387,7 +397,12 @@ mod tests {
         let _ = peer::write_message(&mut stream, &Message::Extended(0, handshake));
 
         while let Ok(message) = peer::read_message(&mut stream) {
-            if let Message::Extended(3, payload) = message {
+            if let Message::Extended(id, payload) = message {
+                // Requests must arrive on the id *we* advertised, and the reply
+                // must go out on the id the client advertised (1): that
+                // direction is what real clients honour and what the old test
+                // peer got wrong.
+                assert_eq!(id, 3, "client sent a request on the peer's advertised id");
                 let Ok((header, _)) = bencode::decode_prefix(&payload) else {
                     continue;
                 };
@@ -402,7 +417,7 @@ mod tests {
                     (b"total_size".to_vec(), Value::Int(metadata.len() as i64)),
                 ]));
                 out.extend_from_slice(&metadata[start..end]);
-                let _ = peer::write_message(&mut stream, &Message::Extended(3, out));
+                let _ = peer::write_message(&mut stream, &Message::Extended(1, out));
             }
         }
     }

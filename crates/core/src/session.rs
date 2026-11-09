@@ -509,7 +509,13 @@ impl Shared {
                 Message::Bitfield(bits) => bitfield = Some(bits),
                 Message::Unchoke => break,
                 Message::Choke => {}
-                Message::KeepAlive | Message::Have(_) => {}
+                // Real clients answer our handshake with their BEP 10 extension
+                // handshake (and sometimes a port message) before unchoking;
+                // those are routine traffic, not a reason to drop the peer.
+                Message::KeepAlive
+                | Message::Have(_)
+                | Message::Port(_)
+                | Message::Extended(..) => {}
                 other => {
                     return Err(Error::Peer(format!(
                         "expected unchoke, got message id {}",
@@ -561,7 +567,11 @@ impl Shared {
                     Message::Choke => {
                         return Err(Error::Peer("peer choked mid-piece".into()));
                     }
-                    Message::KeepAlive | Message::Have(_) => {}
+                    Message::KeepAlive
+                    | Message::Have(_)
+                    | Message::Unchoke
+                    | Message::Port(_)
+                    | Message::Extended(..) => {}
                     other => {
                         return Err(Error::Peer(format!(
                             "expected block, got message id {}",
@@ -619,6 +629,13 @@ mod tests {
             for index in 0..pieces {
                 bits[index / 8] |= 0x80 >> (index % 8);
             }
+            // A BEP 10 peer sends its extension handshake right after the wire
+            // handshake, before the bitfield and unchoke; the piece worker must
+            // ignore it instead of calling the peer broken.
+            let _ = peer::write_message(
+                &mut stream,
+                &Message::Extended(0, b"d1:md11:ut_metadatai1:ee".to_vec()),
+            );
             let _ = peer::write_message(&mut stream, &Message::Bitfield(bits));
             while !matches!(peer::read_message(&mut stream), Ok(Message::Interested)) {}
             let _ = peer::write_message(&mut stream, &Message::Unchoke);
