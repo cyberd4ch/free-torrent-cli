@@ -1250,8 +1250,9 @@
                         <div class="step-num">2</div>
                         <div class="step-content">
                             <div class="step-title">Check it runs</div>
-                            <div class="step-desc">The installer clears the quarantine flag. The binary is unsigned,
-                                so macOS may still ask once — "Open Anyway" settles it.</div>
+                            <div class="step-desc">The installer clears the quarantine flag. The app is ad-hoc signed
+                                unless the maintainer configured a Developer ID, so macOS may still ask once —
+                                "Open Anyway" settles it.</div>
                             <div class="step-code">ftc --version</div>
                         </div>
                     </div>
@@ -1283,7 +1284,9 @@
                         <div class="step-content">
                             <div class="step-title">Open a new terminal, then check it</div>
                             <div class="step-desc">The installer appends <code>%LOCALAPPDATA%\Programs\ftc</code> to
-                                your user PATH. SmartScreen may warn on an unsigned binary: "More info" → "Run anyway".</div>
+                                your user PATH and adds a Start Menu entry that opens the page in an Edge/Chrome
+                                app window — no address bar, no tab. SmartScreen may warn on an unsigned binary:
+                                "More info" → "Run anyway".</div>
                             <div class="step-code">ftc.exe --version</div>
                         </div>
                     </div>
@@ -1332,6 +1335,14 @@ sha256sum -c SHA256SUMS --ignore-missing</div>
                         </div>
                     </div>
                 </div>
+
+                <img class="terminal-shot" src="assets/demo/install-arm64.gif" width="1960" height="720"
+                    loading="lazy" style="margin-top:28px"
+                    alt="The arm64 CI job, replayed: install.sh picks ftc-linux-arm64.tar.gz, prints sha256 ok, installs ftc and its alias, reports Footorrent 3.7.0, and file says the binary is an ELF 64-bit ARM aarch64 executable." />
+                <p class="terminal-capture-note">Both Linux architectures are installed by CI on real hardware before
+                    anyone is told they work: this is the <code>ubuntu-24.04-arm</code> job, replayed line for
+                    line — the right archive, <code>sha256 ok</code>, and a binary that <code>file</code> calls
+                    <code>ARM aarch64</code>.</p>
             </div>
         </div>
     </section>

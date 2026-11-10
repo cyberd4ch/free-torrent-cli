@@ -129,6 +129,13 @@ checks that it picked the right asset, printed `sha256 ok`, and left an
 executable of the right architecture behind — including the paths where it must
 say the digest was *not* checked.
 
+![The arm64 install: the right archive, sha256 ok, the binary's version and an ELF aarch64 report](assets/demo/install-arm64.gif)
+
+That is the `ubuntu-24.04-arm` job of `install-smoke`, replayed: the installer
+picked `ftc-linux-arm64.tar.gz`, verified it, put `ftc` and its alias on the
+PATH, added a desktop entry, and `file` reports an `ELF 64-bit … ARM aarch64`
+binary. The lines are the job's, not a mock-up — the paths are the runner's own.
+
 ```powershell
 # Windows, in PowerShell
 irm https://raw.githubusercontent.com/cyberd4ch/footorrent/main/install.ps1 | iex
