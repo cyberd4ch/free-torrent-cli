@@ -135,10 +135,11 @@ double-clicks into a text editor showing megabytes of binary.
 
 | Platform | Archive | Size |
 | :--- | :--- | ---: |
-| **macOS** app (Apple silicon) | [`ftc-macos-app.zip`](https://github.com/cyberd4ch/footorrent/releases/latest/download/ftc-macos-app.zip) | 1.7 MB |
+| **macOS** app (universal) | [`ftc-macos-app.zip`](https://github.com/cyberd4ch/footorrent/releases/latest/download/ftc-macos-app.zip) | 3.3 MB |
 | **macOS** Apple silicon | [`ftc-macos-arm64.tar.gz`](https://github.com/cyberd4ch/footorrent/releases/latest/download/ftc-macos-arm64.tar.gz) | 1.5 MB |
 | **macOS** Intel | [`ftc-macos-x86_64.tar.gz`](https://github.com/cyberd4ch/footorrent/releases/latest/download/ftc-macos-x86_64.tar.gz) | 1.6 MB |
 | **Linux** x86_64 | [`ftc-linux-x86_64.tar.gz`](https://github.com/cyberd4ch/footorrent/releases/latest/download/ftc-linux-x86_64.tar.gz) | 1.6 MB |
+| **Linux** arm64 | [`ftc-linux-arm64.tar.gz`](https://github.com/cyberd4ch/footorrent/releases/latest/download/ftc-linux-arm64.tar.gz) | 1.6 MB |
 | **Windows** x86_64 | [`ftc-windows-x86_64.zip`](https://github.com/cyberd4ch/footorrent/releases/latest/download/ftc-windows-x86_64.zip) | 1.4 MB |
 
 ```bash
