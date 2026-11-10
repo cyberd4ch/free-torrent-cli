@@ -49,6 +49,10 @@ git push origin vX.Y.Z
   The digest line must read `-> sha256 ok`. Any `-> sha256 SKIPPED — …` line
   (printed on stderr) means the release is missing `SHA256SUMS`, the host has
   no `shasum`/`sha256sum`, or the check was opted out of — read the reason.
+- Check the version the artifacts report, not just the tag: from the
+  downloaded `ftc-macos-app.zip`, `Contents/MacOS/ftc --version` must print the
+  tag's number. 3.6.0 shipped from a `v3.7.0` tag once, because the workspace
+  version was never bumped — `Cargo.toml` is the only place it lives.
 - On macOS, confirm `Footorrent.app` opens the window and shows the new dock
   icon (`assets/brand/AppIcon.icns` is packed into the bundle by `release.yml`;
   `shasum -a 256 Contents/Resources/AppIcon.icns` should match the repo copy).
