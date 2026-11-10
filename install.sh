@@ -115,16 +115,20 @@ if [ "$OS" = Darwin ]; then
   app="$apps/Footorrent.app"
   mkdir -p "$apps"
   # The real app bundle: a WKWebView window compiled in CI, so double-clicking
-  # gives a window rather than a browser tab.
-  if fetch "$URL/ftc-macos-app.zip" "$tmp/ftc-app.zip" 2>/dev/null &&
+  # gives a window rather than a browser tab. It is built for Apple silicon
+  # only, and an arm64 bundle on an Intel Mac does not launch — so fall through
+  # to the launcher there instead of installing something that cannot start.
+  if [ "$ARCH" = arm64 ] &&
+     fetch "$URL/ftc-macos-app.zip" "$tmp/ftc-app.zip" 2>/dev/null &&
      unzip -q -o "$tmp/ftc-app.zip" -d "$apps" >/dev/null 2>&1 &&
      [ -d "$app" ]; then
     xattr -dr com.apple.quarantine "$app" 2>/dev/null || true
     echo "-> installed $app (double-click for the app window)"
   else
-    # Releases before the app bundle only carry the binary; give those users a
-    # launcher that opens the same UI in the browser.
-    echo "-> no app bundle in this release; writing a browser launcher"
+    # Releases before the app bundle only carry the binary, and the bundle is
+    # Apple silicon only; either way, give these users a launcher that opens the
+    # same UI in the browser.
+    echo "-> no native app bundle for this Mac; writing a browser launcher"
     mkdir -p "$app/Contents/MacOS"
     cat > "$app/Contents/MacOS/ftc" <<LAUNCHER
 #!/bin/sh

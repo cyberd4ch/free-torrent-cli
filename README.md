@@ -335,8 +335,28 @@ small and yours to trust:
 
 ## Roadmap
 
-1. A native Windows front end on the same local JSON API (the macOS app already
-   runs on it).
+Planned, not promised — these are gaps the code and the release pipeline still
+have.
+
+### 3.7
+
+- **A macOS app for Intel Macs.** `ftc-macos-app.zip` is an arm64 bundle, so
+  `install.sh` gives Intel Macs a browser launcher rather than an app that
+  cannot start. The fix is a second bundle, or one universal build, in
+  `release.yml`.
+- **A signed, notarized bundle.** The app is ad-hoc signed (`codesign --sign -`),
+  so a browser download meets Gatekeeper. A Developer ID is what removes that
+  dialog without asking anyone to bypass it.
+- **Linux arm64 archives.** `install.sh` answers `Linux/aarch64` with "no Linux
+  arm64 build yet"; no `aarch64-unknown-linux-gnu` target exists in the release
+  matrix.
+- **A Windows window.** A native front end on the same local JSON API the macOS
+  app already speaks.
+
+### Later
+
+- **Pause from the command line.** The terminal bar has three states because the
+  CLI has no pause; pausing a job is a window-only action today.
 
 ## License
 

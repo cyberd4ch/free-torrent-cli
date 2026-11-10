@@ -44,10 +44,14 @@ git push origin vX.Y.Z
   `ftc-macos-app.zip` and `SHA256SUMS`.
 - Install once from the published artifacts, not from a local build:
   `curl -fsSL https://raw.githubusercontent.com/cyberd4ch/footorrent/main/install.sh | sh`.
-  The checksum line must say `VERIFIED`; `SKIPPED` means the release is missing
-  `SHA256SUMS` or the installer could not find `shasum`.
+  The digest line must read `-> sha256 ok`. Any `-> sha256 SKIPPED — …` line
+  (printed on stderr) means the release is missing `SHA256SUMS`, the host has
+  no `shasum`/`sha256sum`, or the check was opted out of — read the reason.
 - On macOS, confirm `Footorrent.app` opens the window and shows the new dock
-  icon (`assets/brand/AppIcon.icns` is packed into the bundle by `release.yml`).
+  icon (`assets/brand/AppIcon.icns` is packed into the bundle by `release.yml`;
+  `shasum -a 256 Contents/Resources/AppIcon.icns` should match the repo copy).
+  The bundle is Apple silicon only — `install.sh` writes a browser launcher on
+  Intel, so an Intel Mac is not a failing check.
 - Confirm the Pages run that follows the changelog/site commit deployed, and
   that the release post resolves at `docs/release-X.Y.Z.html`.
 - Only if the workflow failed before publishing anything: delete the tag
