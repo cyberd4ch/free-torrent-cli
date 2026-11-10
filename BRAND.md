@@ -81,9 +81,12 @@ that, drop the carved arrow and keep the footprint silhouette. Do not rotate,
 recolor outside the palette, add a gradient to the mark, or place the lockup on
 a photograph.
 
-The three SVG files above still carry an earlier ember-on-ink treatment
-(`#FF7A2F` on `#14161C`) and predate this palette; redrawing them in paper and
-blue is outstanding.
+All three are drawn in this palette with transparent backgrounds: a `#F1E9DA`
+tile with a `--line-2` border and 0.23 × side radius, the footprint in
+`--accent`, and the arrow carved in the tile colour so it reads as a cut-out
+rather than a second shape. The lockup puts the 64 px tile beside the wordmark
+and the tagline in `--dim`, and is meant to sit on `--bg` or white, not on a
+screenshot.
 
 ## Voice
 
@@ -98,7 +101,8 @@ in code, paths and commands.
 ## UI tokens
 
 The palette above is the interface contract. `crates/cli/src/ui.html`,
-`docs/index.html` and `docs/release-3.5.0.html` share one `:root` block: the
+`docs/index.html`, `docs/release-3.5.0.html` and `docs/release-3.6.0.html` share
+one `:root` block: the
 window's variables as declared, plus `--field` for the fill it sets inline.
 Change a value in the window first, then copy it out.
 

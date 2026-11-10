@@ -390,6 +390,69 @@
             color: var(--text);
         }
 
+        /* state captures under the hero: paused, completed, details */
+        .shot-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 20px 18px;
+            max-width: 1000px;
+            margin: 20px auto 0;
+        }
+
+        .shot-grid figure {
+            margin: 0;
+        }
+
+        .shot-grid .wide {
+            grid-column: 1 / -1;
+        }
+
+        .shot-grid a {
+            display: block;
+        }
+
+        .shot-grid img {
+            display: block;
+            width: 100%;
+            height: auto;
+            border: 1px solid var(--line-2);
+            border-radius: 10px;
+            background: var(--panel);
+            box-shadow: 0 24px 48px -44px rgba(44, 54, 66, .6);
+            transition: border-color .2s, transform .2s;
+        }
+
+        .shot-grid a:hover img {
+            border-color: #a9bfd4;
+            transform: translateY(-2px);
+        }
+
+        .shot-grid figcaption {
+            margin-top: 10px;
+            font-family: var(--mono);
+            font-size: 11px;
+            line-height: 1.6;
+            color: var(--dim);
+        }
+
+        .shot-grid .dot {
+            display: inline-block;
+            width: 6px;
+            height: 6px;
+            margin-right: 8px;
+            border-radius: 50%;
+            background: var(--accent);
+            vertical-align: middle;
+        }
+
+        .shot-grid .dot.warn {
+            background: var(--warn);
+        }
+
+        .shot-grid .dot.ok {
+            background: var(--ok);
+        }
+
         /* ── Sections ─────────────────────────────────────────────────────────── */
         .section {
             position: relative;
@@ -835,6 +898,11 @@
                 margin-top: 40px;
             }
 
+            .shot-grid {
+                grid-template-columns: minmax(0, 1fr);
+                margin-top: 14px;
+            }
+
             .section {
                 padding: 56px 18px;
             }
@@ -932,7 +1000,7 @@
             </div>
             <div class="hero-stat-divider"></div>
             <div>
-                <div class="hero-stat-value">51</div>
+                <div class="hero-stat-value">64</div>
                 <div class="hero-stat-label">TESTS PASSING</div>
             </div>
             <div class="hero-stat-divider"></div>
@@ -955,6 +1023,29 @@
                 the download manager, served by <code>ftc serve</code> — the page the macOS app opens
             </figcaption>
         </figure>
+
+        <div class="shot-grid">
+            <figure>
+                <a href="assets/demo/gui-paused.png">
+                    <img src="assets/demo/gui-paused.png" width="2360" height="1720" loading="lazy"
+                        alt="The same window with the third download paused: amber PAUSED pill, zero peers and no speed, while a fifth job downloads at 5.9 MB/s and a sixth sits completed at 100%." />
+                </a>
+                <figcaption><i class="dot warn"></i> paused — piece map kept, peers dropped</figcaption>
+            </figure>
+            <figure>
+                <a href="assets/demo/gui-done.png">
+                    <img src="assets/demo/gui-done.png" width="2360" height="1720" loading="lazy"
+                        alt="Two downloads finished at 100% with green COMPLETED pills, the session panel reading 0 active and 240 MB downloaded, and the selected job showing its path." />
+                </a>
+                <figcaption><i class="dot ok"></i> completed — 100%, verified, nothing active</figcaption>
+            </figure>
+            <figure class="wide">
+                <img src="assets/demo/gui-details-strip.png" width="1980" height="444" loading="lazy"
+                    alt="The details strip under the table: the selected job's name and DOWNLOADING pill, its full destination path, 120 MB size, 114 MB downloaded at 95%, 5.9 MB/s, and Open folder / Copy path buttons." />
+                <figcaption><i class="dot"></i> details — path, size, downloaded and speed for the selected
+                    job</figcaption>
+            </figure>
+        </div>
     </section>
 
     <!-- Download -->
@@ -1267,6 +1358,7 @@ sha256sum -c SHA256SUMS --ignore-missing</div>
         <div class="footer-logo"><b>foot</b>orrent</div>
         <ul class="footer-links">
             <li><a href="./release-3.5.0.html">3.5.0 release post</a></li>
+            <li><a href="./release-3.6.0.html">3.6.0 notes (in main)</a></li>
             <li><a href="https://github.com/cyberd4ch/footorrent" target="_blank" rel="noopener">GitHub</a></li>
             <li><a href="https://github.com/cyberd4ch/footorrent/releases" target="_blank"
                     rel="noopener">Releases</a></li>

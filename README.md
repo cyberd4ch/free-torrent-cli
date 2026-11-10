@@ -24,6 +24,11 @@ The GUI is a download manager — categories, a live sortable table, pause and
 resume, per-peer detail — and the CLI renders progress against the very same
 counters, so the two can never disagree.
 
+**[cyberd4ch.github.io/footorrent](https://cyberd4ch.github.io/footorrent/)** —
+the site: real captures of the window, the state-by-state gallery, and the
+release notes ([3.5.0](https://cyberd4ch.github.io/footorrent/release-3.5.0.html),
+[3.6.0, in main](https://cyberd4ch.github.io/footorrent/release-3.6.0.html)).
+
 ---
 
 ## Why Footorrent
@@ -315,6 +320,8 @@ small and yours to trust:
   handful is a design decision, not an accident.
 - Contributed code arrives under GPL-3.0-or-later — that is how the client
   stays free for the next person too.
+- The mark, lockup and icon in `assets/brand/` follow [BRAND.md](BRAND.md):
+  paper and blue only, no recolouring, no gradients on the mark.
 
 ## Roadmap
 
