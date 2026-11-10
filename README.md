@@ -184,6 +184,9 @@ own aggregated rate, the same number the GUI table shows:
 ⠴ [██████████████░░░░░░░░░░░░░░░░] · 5.9 MB/s · eta 13s · 6 peers
 ```
 
+Redirect the output, or set `NO_COLOR`, and the same counters print as plain
+lines that never repaint — a log file stays readable.
+
 A magnet with no tracker still works: it hunts peers through the DHT, fetches
 the `info` dictionary from them (BEP 9/10), and verifies it against the info
 hash before writing a single byte. Peers you already know can be forced with
@@ -210,10 +213,11 @@ broken download.
 ## The download manager
 
 ```bash
-ftc gui                          # web ui, opened in your browser
-ftc serve                        # http://127.0.0.1:8080, terminal only
-ftc serve --port 9000 -o ~/Downloads
-ftc serve --limit 2M             # default cap for every job added from the page
+ftc gui                                # web ui, opened in your browser
+ftc serve                              # http://127.0.0.1:8080, terminal only
+ftc serve --port 9000 -o ~/Downloads   # the page's own http port
+ftc serve --swarm-port 7000            # announce/dht port, when 6881 is taken
+ftc serve --limit 2M                   # default cap for every job added from the page
 ```
 
 The same engine behind a local download manager — the window at the top of this

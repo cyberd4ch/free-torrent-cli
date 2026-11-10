@@ -1317,6 +1317,18 @@ sha256sum -c SHA256SUMS --ignore-missing</div>
                     what actually checks out — a half-downloaded folder never claims it has the rest.</div>
             </div>
             <div class="feature-cell">
+                <div class="feature-icon">📡</div>
+                <div class="feature-title">Seeds answer magnets</div>
+                <div class="feature-desc">A seeding process serves the <code>info</code> dictionary it has just
+                    verified (BEP 9/10), so a swarm of Footorrent clients can bootstrap from the seed alone.</div>
+            </div>
+            <div class="feature-cell">
+                <div class="feature-icon">🔗</div>
+                <div class="feature-title">One connection, many pieces</div>
+                <div class="feature-desc">Workers hold a negotiated connection instead of dialling per piece, so a
+                    lone seed delivers sustained throughput rather than a stuttering 30 KB/s crawl.</div>
+            </div>
+            <div class="feature-cell">
                 <div class="feature-icon">🛡️</div>
                 <div class="feature-title">Safe by default</div>
                 <div class="feature-desc">Torrent paths with <code>..</code>, absolute paths or separators are
