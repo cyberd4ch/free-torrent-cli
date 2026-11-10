@@ -1,0 +1,94 @@
+name: install-smoke
+
+# The installer is the first code anyone runs, and it now claims two Linux
+# architectures. Build a real archive per architecture, point install.sh at it
+# with FTC_BASE_URL, and check what it actually did — including the paths where
+# it must say it did *not* verify a digest.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  install:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            asset: ftc-linux-x86_64.tar.gz
+            file_arch: x86-64
+          - os: ubuntu-24.04-arm
+            asset: ftc-linux-arm64.tar.gz
+            file_arch: aarch64
+    runs-on: ${{ matrix.os }}
+    env:
+      XDG_DATA_HOME: ${{ github.workspace }}/xdg
+      FTC_PREFIX: ${{ github.workspace }}/prefix
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build and package the way the release does
+        run: |
+          set -euo pipefail
+          cargo build --release -p free-torrent-cli
+          mkdir -p stage dist
+          cp target/release/ftc stage/ftc
+          chmod 755 stage/ftc
+          ln -s ftc stage/footorrent
+          tar -czf "dist/${{ matrix.asset }}" -C stage ftc footorrent
+          (cd dist && sha256sum "${{ matrix.asset }}" > SHA256SUMS)
+          ls -l dist
+
+      - name: Installs the right asset and verifies it
+        run: |
+          set -euo pipefail
+          base="file://$PWD/dist"
+          out=$(FTC_BASE_URL="$base" sh install.sh 2>&1) || { printf '%s\n' "$out"; exit 1; }
+          printf '%s\n' "$out"
+          grep -qF -- "-> ${{ matrix.asset }}" <<<"$out"
+          grep -qF -- "sha256 ok" <<<"$out"
+          test -x "$FTC_PREFIX/ftc"
+          test -L "$FTC_PREFIX/footorrent"
+          file "$FTC_PREFIX/ftc" | grep -qF -- "${{ matrix.file_arch }}"
+          "$FTC_PREFIX/ftc" --version | grep -qF "Footorrent"
+
+      - name: Says so when the check is opted out of
+        run: |
+          set -euo pipefail
+          out=$(FTC_NO_VERIFY=1 FTC_BASE_URL="file://$PWD/dist" sh install.sh 2>&1) \
+            || { printf '%s\n' "$out"; exit 1; }
+          printf '%s\n' "$out"
+          grep -qF -- "sha256 SKIPPED — FTC_NO_VERIFY is set" <<<"$out"
+
+      - name: Says so when the release carries no SHA256SUMS
+        run: |
+          set -euo pipefail
+          mv dist/SHA256SUMS /tmp/SHA256SUMS.keep
+          out=$(FTC_BASE_URL="file://$PWD/dist" sh install.sh 2>&1) \
+            || { mv /tmp/SHA256SUMS.keep dist/SHA256SUMS; printf '%s\n' "$out"; exit 1; }
+          mv /tmp/SHA256SUMS.keep dist/SHA256SUMS
+          printf '%s\n' "$out"
+          grep -qF -- "sha256 SKIPPED — this release carries no SHA256SUMS" <<<"$out"
+
+      - name: Refuses an unsupported machine
+        run: |
+          set -euo pipefail
+          mkdir -p shim
+          cat > shim/uname <<'SH'
+          #!/bin/sh
+          case "$1" in
+            -s) echo Linux ;;
+            -m) echo riscv64 ;;
+            *) exec /usr/bin/uname "$@" ;;
+          esac
+          SH
+          chmod +x shim/uname
+          if out=$(PATH="$PWD/shim:$PATH" FTC_BASE_URL="file://$PWD/dist" sh install.sh 2>&1); then
+            echo "expected the installer to refuse riscv64"; printf '%s\n' "$out"; exit 1
+          fi
+          printf '%s\n' "$out"
+          grep -qF -- "unsupported platform Linux/riscv64" <<<"$out"
