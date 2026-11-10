@@ -72,9 +72,15 @@ Files in `assets/brand/`:
 | `footorrent-mark.svg` | 64 px tile: favicon, app icon, avatars |
 | `footorrent-lockup.svg` | mark + wordmark, horizontal |
 | `icon-1024.svg` | macOS / store icon source |
+| `AppIcon.icns` | generated from `icon-1024.svg`; packed into `Footorrent.app` |
 
 In the window the mark is drawn in `--accent` inside a 26 px `#F1E9DA` tile with
 a `--line-2` border, sitting beside the wordmark.
+
+`docs/assets/brand/footorrent-mark.svg` is the published copy the site's
+favicon points at, because Pages serves `docs/` only — update it whenever the
+mark changes. The 32 px favicon in `crates/cli/src/serve.rs` (`/favicon.ico`)
+and the data URI in `crates/cli/src/ui.html` are the same mark at tile scale.
 
 Clear space is half a toe radius on all sides. Minimum tile size is 16 px; below
 that, drop the carved arrow and keep the footprint silhouette. Do not rotate,

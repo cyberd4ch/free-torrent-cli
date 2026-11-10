@@ -20,14 +20,17 @@ use std::time::{SystemTime, UNIX_EPOCH};
 const UI: &str = include_str!("ui.html");
 
 /// Served at `/favicon.ico` so a browser never logs a failed icon request.
+///
+/// The same mark as `assets/brand/footorrent-mark.svg`: cream tile, blue
+/// footprint, arrow carved in the tile colour. Keep the two in step.
 const ICON: &str = "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'>\
-<rect width='32' height='32' rx='7' fill='#14161c'/>\
-<g fill='#ff7a2f'>\
+<rect x='.5' y='.5' width='31' height='31' rx='7' fill='#f1e9da' stroke='#d2c5ae'/>\
+<g fill='#2f6fa8'>\
 <circle cx='10' cy='9' r='2.1'/><circle cx='15' cy='7' r='2.3'/><circle cx='20' cy='7.6' r='2.1'/>\
 <circle cx='24' cy='10' r='1.8'/>\
 <path d='M11.5 13c2.6-1.2 6.6-1.2 9.1 0 1.7.8 2.3 2.7 1.8 5.1-.6 3-1.8 4.9-3.7 6.3-.9.7-1.4.7-2.3 0-1.9-1.4-3.1-3.3-3.7-6.3-.5-2.4.1-4.3 1.8-5.1z'/>\
 </g>\
-<path d='M16 15.5v5m0 0-2.6-2.6M16 20.5l2.6-2.6' fill='none' stroke='#14161c' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/></svg>";
+<path d='M16 15.5v5m0 0-2.6-2.6M16 20.5l2.6-2.6' fill='none' stroke='#f1e9da' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/></svg>";
 
 pub struct Server {
     listener: TcpListener,

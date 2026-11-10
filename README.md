@@ -81,6 +81,12 @@ rates and path in the details pane:
 | :---: | :---: |
 | ![A paused download with its details pane](assets/demo/gui-paused.png) | ![A completed download, 100% green](assets/demo/gui-done.png) |
 
+Select any row and the strip underneath answers the only questions worth asking
+of a download: where it is going, how big it is, how much has landed, and how
+fast it is arriving.
+
+![The details strip: the selected job's path, 120 MB size, 114 MB downloaded at 95%, and 5.9 MB/s](assets/demo/gui-details-strip.png)
+
 ---
 
 ## Install
