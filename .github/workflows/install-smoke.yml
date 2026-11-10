@@ -53,8 +53,10 @@ jobs:
           grep -qF -- "sha256 ok" <<<"$out"
           test -x "$FTC_PREFIX/ftc"
           test -L "$FTC_PREFIX/footorrent"
-          file "$FTC_PREFIX/ftc" | grep -qF -- "${{ matrix.file_arch }}"
-          "$FTC_PREFIX/ftc" --version | grep -qF "Footorrent"
+          # Printed as well as asserted: the log is the evidence that the
+          # archive was for this machine, not a claim that it might be.
+          file "$FTC_PREFIX/ftc" | grep -F -- "${{ matrix.file_arch }}"
+          "$FTC_PREFIX/ftc" --version | tee /dev/stderr | grep -qF "Footorrent"
 
       - name: Says so when the check is opted out of
         run: |
