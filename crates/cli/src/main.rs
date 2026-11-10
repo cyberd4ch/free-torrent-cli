@@ -1,5 +1,6 @@
 mod http;
 mod serve;
+mod window;
 
 use ftc_core::session::Options;
 use ftc_core::{magnet, Session, Snapshot, Torrent};
@@ -57,7 +58,7 @@ ftc serve / ftc gui — the web ui
 
 USAGE:
     ftc serve [options]     headless, prints the url
-    ftc gui [options]       opens the page in your browser
+    ftc gui [options]       opens the page in its own window
 
 OPTIONS:
         --bind <addr>     interface to listen on (default: 127.0.0.1)
@@ -86,7 +87,12 @@ fn run() -> Result<(), String> {
     match argv.first().map(String::as_str) {
         Some("swarm") => return run_swarm(&argv[1..]),
         Some("serve") => return run_server(&argv[1..], false),
-        Some("gui") => return run_server(&argv[1..], true),
+        Some("gui") => {
+            // A shortcut launch owns a console nobody asked for; a `ftc gui`
+            // typed in a terminal shares the shell's and keeps it.
+            window::hide_console();
+            return run_server(&argv[1..], true);
+        }
         _ => {}
     }
     let mut args = argv.into_iter();
@@ -468,7 +474,19 @@ fn run_server(args: &[String], gui: bool) -> Result<(), String> {
     println!("ftc web ui -> {url}");
     println!("downloads -> {}", output.display());
     if open {
-        open_browser(&url);
+        // On Windows the page gets an app-shaped window of its own; elsewhere
+        // (and if no Chromium browser is installed) it goes to the default one.
+        match window::open_app_window(&url) {
+            Some(mut child) => {
+                // The window *is* the process: closing it stops the server, the
+                // same way closing the macOS app does.
+                std::thread::spawn(move || {
+                    let _ = child.wait();
+                    std::process::exit(0);
+                });
+            }
+            None => open_browser(&url),
+        }
     } else {
         println!("Ctrl-C to stop");
     }

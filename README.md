@@ -107,6 +107,13 @@ when you close the window. On Windows the installer adds a Start Menu entry and
 on Linux a `ftc.desktop` file, both running `ftc gui`. One installed binary,
 both interfaces: the command line when you want it, a window when you don't.
 
+`ftc gui` on Windows now opens the page in **an app-shaped window** rather than
+a browser tab: Edge's or Chrome's `--app=` mode, a fixed 1180×820, its own
+profile directory, no address bar and no Back button. Closing the window stops
+the server, because the window is the only reason it was running. The console
+that Windows would otherwise leave behind is detached when the shortcut started
+it — but not when you typed `ftc gui` in a terminal, where it is your console.
+
 ### What the installer does, in the open
 
 You shouldn't have to trust a script you pipe to `sh`. The installer is a
@@ -200,12 +207,12 @@ amber, the workers park between blocks and the stats become how much has
 actually landed. Type `p` again to resume. Verified pieces are never downloaded
 twice, so a pause costs nothing but time.
 
-```
-‖ ███████████▏░░░░░░░░░░░░░░░░░░ · paused · 768 KB / 2.0 MB
-```
+![A 2 MB download paused with an amber bar at 576 KB, then resumed and finished green](assets/demo/terminal-pause.gif)
 
-That frame is a real one: a 2 MB torrent, paused a third of the way in and
-resumed to completion — the file that landed hashed identical to the source.
+The capture is the client's own output: a 2 MB torrent over loopback, paused a
+third of the way in and resumed to completion — the file that landed hashed
+identical to the source. The frames are rendered from the bytes `ftc` printed
+during that run, not drawn by hand.
 
 A magnet with no tracker still works: it hunts peers through the DHT, fetches
 the `info` dictionary from them (BEP 9/10), and verifies it against the info
@@ -360,11 +367,16 @@ have.
 
 ### Next
 
-- **A signed, notarized bundle.** The app is universal now but still ad-hoc
-  signed (`codesign --sign -`), so a browser download meets Gatekeeper. A
-  Developer ID is what removes that dialog without asking anyone to bypass it.
-- **A Windows window.** A native front end on the same local JSON API the macOS
-  app already speaks.
+- **A notarized release, not just a notarizing pipeline.** `release.yml` now
+  signs the nested engine and the bundle with a Developer ID, submits them to
+  `notarytool`, staples the ticket and re-checks the shipped zip — but only when
+  the certificate secrets exist. Until they do, every tag falls back to the
+  ad-hoc signature and says so in the job log, so a download still meets
+  Gatekeeper.
+- **A Windows window without Edge.** `ftc gui` uses the Chromium already on the
+  machine, which is Edge on every Windows 10/11 install. Shipping a WebView2
+  host of our own would remove that assumption — and the last dependency on a
+  browser we did not write.
 
 ## License
 

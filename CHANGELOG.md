@@ -7,7 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-_No changes yet._
+### Added
+
+- **A window on Windows.** `ftc gui` used to hand the page to the default
+  browser, leaving a tab: an address bar, a Back button and a history entry.
+  It now uses Edge's or Chrome's Chromium app mode — a fixed 1180×820 window,
+  no browser chrome, its own profile directory — and quits the server when the
+  window closes. The console Windows creates for a shortcut launch is detached;
+  a console a terminal is using is left alone, which `GetConsoleProcessList`
+  decides.
+- **A release that can be notarized.** When a Developer ID is configured,
+  `release.yml` signs the nested `ftc` and the bundle with the hardened runtime
+  and a timestamp, submits them with `notarytool submit --wait`, staples the
+  ticket and re-verifies the *shipped* zip, so a download opens without the
+  Gatekeeper warning. Without the secrets the job falls back to the ad-hoc
+  signature it has always used and says so in the log — a fork still builds.
+
+### Changed
+
+- **The pause state is now on screen, not just in prose.** The README and the
+  site carry a frame-by-frame capture of a paused download, rendered from the
+  bytes the client printed during a real 2 MB run.
 
 ## [3.7.0] - 2026-11-10
 

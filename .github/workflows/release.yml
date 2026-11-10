@@ -125,9 +125,74 @@ jobs:
           </plist>
           PLIST
           plutil -lint "$app/Contents/Info.plist"
-          codesign --force --deep --sign - "$app"
+      # A Developer ID turns "right-click, Open anyway" into a normal double-click.
+      # The secrets are optional on purpose: a fork or a maintainer without the
+      # certificate still gets a working (ad-hoc signed) app, and the job says so
+      # in its log instead of failing.
+      - name: Sign, notarize and staple
+        env:
+          MACOS_CERT_P12: ${{ secrets.MACOS_CERT_P12 }}
+          MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+          MACOS_KEYCHAIN_PASSWORD: ${{ secrets.MACOS_KEYCHAIN_PASSWORD }}
+          MACOS_SIGN_IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY }}
+          MACOS_NOTARY_APPLE_ID: ${{ secrets.MACOS_NOTARY_APPLE_ID }}
+          MACOS_NOTARY_TEAM_ID: ${{ secrets.MACOS_NOTARY_TEAM_ID }}
+          MACOS_NOTARY_PASSWORD: ${{ secrets.MACOS_NOTARY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          app="stage/Footorrent.app"
           mkdir -p dist
+
+          if [ -z "${MACOS_CERT_P12:-}" ]; then
+            echo "::notice title=Ad-hoc signature::No Developer ID secrets are configured, so the app is ad-hoc signed and macOS will warn on a browser download."
+            codesign --force --deep --sign - "$app"
+            codesign --verify --strict --verbose=2 "$app"
+            ditto -c -k --sequesterRsrc --keepParent "$app" dist/ftc-macos-app.zip
+            ls -l dist
+            exit 0
+          fi
+
+          keychain="$RUNNER_TEMP/ftc-signing.keychain-db"
+          echo "$MACOS_CERT_P12" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security create-keychain -p "$MACOS_KEYCHAIN_PASSWORD" "$keychain"
+          security set-keychain-settings -lut 900 "$keychain"
+          security unlock-keychain -p "$MACOS_KEYCHAIN_PASSWORD" "$keychain"
+          security import "$RUNNER_TEMP/cert.p12" -k "$keychain" \
+            -P "$MACOS_CERT_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: \
+            -s -k "$MACOS_KEYCHAIN_PASSWORD" "$keychain" >/dev/null
+          security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
+          rm -f "$RUNNER_TEMP/cert.p12"
+          trap 'security delete-keychain "$keychain" || true' EXIT
+
+          identity="$MACOS_SIGN_IDENTITY"
+          # The nested engine is signed first: `--deep` would leave it with the
+          # ad-hoc signature it was built with, and the notary service rejects
+          # a bundle with an unsigned-in-practice child.
+          codesign --force --options runtime --timestamp --sign "$identity" \
+            "$app/Contents/MacOS/ftc"
+          codesign --force --options runtime --timestamp \
+            --entitlements gui/macos/Footorrent.entitlements --sign "$identity" "$app"
+          codesign --verify --deep --strict --verbose=2 "$app"
+          codesign -dv --verbose=4 "$app" 2>&1 | grep -E 'Authority|TeamIdentifier|flags' || true
+
+          # Submit a zip, staple the bundle, then build the *shipped* zip from the
+          # stapled bundle — otherwise the download carries no ticket and needs
+          # the network on first launch.
+          ditto -c -k --sequesterRsrc --keepParent "$app" "$RUNNER_TEMP/submit.zip"
+          xcrun notarytool submit "$RUNNER_TEMP/submit.zip" \
+            --apple-id "$MACOS_NOTARY_APPLE_ID" \
+            --team-id "$MACOS_NOTARY_TEAM_ID" \
+            --password "$MACOS_NOTARY_PASSWORD" --wait
+          xcrun stapler staple "$app"
+          xcrun stapler validate "$app"
+          spctl --assess --type execute --verbose=4 "$app"
+
           ditto -c -k --sequesterRsrc --keepParent "$app" dist/ftc-macos-app.zip
+          # The zip is what people download, so check the ticket survived it.
+          ditto -x -k dist/ftc-macos-app.zip "$RUNNER_TEMP/unzipped"
+          codesign --verify --deep --strict --verbose=2 "$RUNNER_TEMP/unzipped/Footorrent.app"
+          xcrun stapler validate "$RUNNER_TEMP/unzipped/Footorrent.app"
           ls -l dist
       - uses: actions/upload-artifact@v7
         with:

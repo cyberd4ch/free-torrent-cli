@@ -6,7 +6,7 @@ GUI's `/api/version` all read it at compile time through `CARGO_PKG_VERSION`,
 so nothing else in the code carries a number to bump.
 
 A tag is the only thing that publishes. `release.yml` fires on `v*`, builds the
-four platform archives plus the macOS app bundle, writes `SHA256SUMS`, and
+five platform archives plus the macOS app bundle, writes `SHA256SUMS`, and
 attaches everything to a GitHub Release. `static.yml` deploys `docs/` on every
 push to `main`.
 
@@ -29,6 +29,32 @@ push to `main`.
 6. Green gate, same as CI: `cargo test --all`,
    `cargo clippy --all-targets -- -D warnings`, `cargo fmt --all -- --check`,
    `shellcheck install.sh`.
+
+## Signing and notarizing
+
+The `app-macos` job signs and notarizes when these repository secrets exist, and
+falls back to the ad-hoc signature (`codesign --sign -`) when they do not — with
+a `::notice` in the log, so an unsigned release is visible rather than silent.
+A fork needs none of this; a release that should open without a Gatekeeper
+warning needs all of it.
+
+| Secret | What it is |
+| --- | --- |
+| `MACOS_CERT_P12` | `base64 -i developerID.p12` — a Developer ID Application certificate plus its private key, exported from Keychain Access |
+| `MACOS_CERT_PASSWORD` | the `.p12` export password |
+| `MACOS_KEYCHAIN_PASSWORD` | any throwaway password for the temporary keychain the job creates |
+| `MACOS_SIGN_IDENTITY` | e.g. `Developer ID Application: Your Name (TEAMID)` |
+| `MACOS_NOTARY_APPLE_ID` | the Apple ID that owns the team |
+| `MACOS_NOTARY_TEAM_ID` | the 10-character team identifier |
+| `MACOS_NOTARY_PASSWORD` | an app-specific password from appleid.apple.com, **not** the account password |
+
+What the job does with them: unlock a temporary keychain, sign the nested
+`Contents/MacOS/ftc` first (a `--deep` signature would leave it ad-hoc and the
+notary rejects the bundle), sign the app with the hardened runtime, a timestamp
+and `gui/macos/Footorrent.entitlements`, submit a zip with
+`notarytool submit --wait`, staple the bundle, then build the shipped zip from
+the **stapled** bundle and re-verify what that zip contains. It also deletes the
+keychain on exit, including on failure.
 
 ## Tag
 
@@ -56,8 +82,15 @@ git push origin vX.Y.Z
 - On macOS, confirm `Footorrent.app` opens the window and shows the new dock
   icon (`assets/brand/AppIcon.icns` is packed into the bundle by `release.yml`;
   `shasum -a 256 Contents/Resources/AppIcon.icns` should match the repo copy).
-  The bundle is Apple silicon only — `install.sh` writes a browser launcher on
-  Intel, so an Intel Mac is not a failing check.
+  Clicking through `ftc gui` in the bundle is the same page the CLI serves.
+- On Windows, the Start Menu entry must open an Edge/Chrome app window — no
+  address bar, no Back button — and closing it must stop the server. A console
+  window appearing behind it means the shortcut launched a console that was
+  shared with something else; check `GetConsoleProcessList` handling in
+  `crates/cli/src/window.rs`.
+- If signing is configured, `spctl --assess --type execute -vv` on the extracted
+  app must say `accepted` and `source=Notarized Developer ID`, and
+  `xcrun stapler validate` must pass *after* unzipping the shipped archive.
 - Confirm the Pages run that follows the changelog/site commit deployed, and
   that the release post resolves at `docs/release-X.Y.Z.html`.
 - Only if the workflow failed before publishing anything: delete the tag

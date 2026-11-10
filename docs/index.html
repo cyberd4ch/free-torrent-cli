@@ -1159,7 +1159,7 @@
                 <div class="platform-version">Footorrent v3.7.0</div>
                 <div class="platform-requirements">
                     <span>Windows 10+</span><br />
-                    64-bit, portable executable
+                    64-bit; the Start Menu opens an Edge/Chrome app window
                 </div>
                 <div class="platform-downloads">
                     <a class="download-btn"
@@ -1428,6 +1428,17 @@ sha256sum -c SHA256SUMS --ignore-missing</div>
                 <p class="terminal-capture-note">A bare magnet: the bar stays empty until the <code>info</code>
                     dictionary has arrived and verified, and the peer count only moves when the swarm answers. No
                     bytes are written in this phase.</p>
+            </div>
+
+            <div class="terminal-capture-sub">
+                <div class="terminal-cmd"><span class="t-prompt">→</span> ftc pause-large.bin --limit 260k
+                    <span style="color: var(--muted, #8492a0)"># then p + Enter, twice</span></div>
+                <img class="terminal-shot" src="assets/demo/terminal-pause.gif" width="1960" height="400"
+                    loading="lazy"
+                    alt="A real run rendered frame by frame: the bar fills blue at 258 KB/s, then holds amber at 576 KB of 2.0 MB while paused, then resumes and finishes green with 'done · 2.0 MB'." />
+                <p class="terminal-capture-note">The pause key, from the client's own output: amber while the
+                    workers are parked, with how much has actually landed, then the same run finishing green. Every
+                    glyph in that animation came from the bytes <code>ftc</code> printed during the run.</p>
             </div>
         </div>
     </section>
