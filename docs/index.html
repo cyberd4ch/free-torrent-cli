@@ -825,6 +825,58 @@
             color: var(--dim);
         }
 
+        /* real capture of the terminal bar, not a mock-up */
+        .terminal-capture {
+            margin-top: 46px;
+        }
+
+        .terminal-capture-title {
+            font-size: 20px;
+            font-weight: 600;
+            letter-spacing: -.01em;
+            color: var(--text);
+            margin: 8px 0 8px;
+        }
+
+        .terminal-capture-copy {
+            max-width: 720px;
+            font-size: 14.5px;
+            color: var(--muted);
+        }
+
+        .terminal-cmd {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 16px;
+            padding: 7px 13px;
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            background: var(--panel);
+            font-family: var(--mono);
+            font-size: 12px;
+            color: var(--text);
+        }
+
+        .terminal-shot {
+            display: block;
+            width: 100%;
+            height: auto;
+            margin-top: 18px;
+            border: 1px solid var(--line-2);
+            border-radius: 12px;
+            box-shadow: 0 28px 56px -46px rgba(44, 54, 66, .6);
+        }
+
+        .terminal-capture-note {
+            max-width: 780px;
+            margin-top: 12px;
+            font-family: var(--mono);
+            font-size: 11px;
+            line-height: 1.7;
+            color: var(--dim);
+        }
+
         /* ── Footer ───────────────────────────────────────────────────────────── */
         footer {
             border-top: 1px solid var(--line);
@@ -939,7 +991,7 @@
             <li><a href="#download">Download</a></li>
             <li><a href="#install">Install</a></li>
             <li><a href="#features">Features</a></li>
-            <li><a href="./release-3.5.0.html">Release 3.5.0</a></li>
+            <li><a href="./release-3.6.0.html">Release 3.6.0</a></li>
             <li>
                 <a href="https://github.com/cyberd4ch/footorrent" target="_blank" rel="noopener"
                     class="nav-github">
@@ -955,9 +1007,9 @@
 
     <!-- Hero -->
     <section class="hero">
-        <a class="hero-badge" href="./release-3.5.0.html">
+        <a class="hero-badge" href="./release-3.6.0.html">
             <span class="hero-badge-dot"></span>
-            v3.5.0 — Footorrent, magnet preview with exact size, live peers · what changed
+            v3.6.0 — a bar, a port, and a minute back · what changed
         </a>
 
         <h1 class="hero-title">
@@ -1065,7 +1117,7 @@
             <div class="platform-card featured">
                 <span class="platform-icon">🍎</span>
                 <div class="platform-name">macOS</div>
-                <div class="platform-version">Footorrent v3.5.0</div>
+                <div class="platform-version">Footorrent v3.6.0</div>
                 <div class="platform-requirements">
                     <span>macOS 11+</span><br />
                     Apple silicon &amp; Intel
@@ -1100,7 +1152,7 @@
             <div class="platform-card">
                 <span class="platform-icon">🪟</span>
                 <div class="platform-name">Windows</div>
-                <div class="platform-version">Footorrent v3.5.0</div>
+                <div class="platform-version">Footorrent v3.6.0</div>
                 <div class="platform-requirements">
                     <span>Windows 10+</span><br />
                     64-bit, portable executable
@@ -1124,7 +1176,7 @@
             <div class="platform-card">
                 <span class="platform-icon">🐧</span>
                 <div class="platform-name">Linux</div>
-                <div class="platform-version">Footorrent v3.5.0</div>
+                <div class="platform-version">Footorrent v3.6.0</div>
                 <div class="platform-requirements">
                     <span>x86_64 glibc</span><br />
                     Any distro — nothing to satisfy
@@ -1151,6 +1203,9 @@
                 href="https://github.com/cyberd4ch/footorrent/releases/latest/download/SHA256SUMS">SHA256SUMS</a>
             — verify before running:<br />
             <code>curl -LO …/releases/latest/download/SHA256SUMS &amp;&amp; shasum -a 256 -c SHA256SUMS --ignore-missing</code>
+            <br /><br />
+            The 3.6.0 archives are built by the <code>v3.6.0</code> tag. If these buttons still hand you 3.5.0,
+            the tag has not been pushed yet — build from <code>main</code> in the meantime.
         </div>
     </section>
 
@@ -1336,33 +1391,21 @@ sha256sum -c SHA256SUMS --ignore-missing</div>
             </div>
         </div>
 
-        <!-- Terminal demo -->
-        <div class="terminal">
-            <div class="terminal-bar">
-                <div class="terminal-dot red"></div>
-                <div class="terminal-dot yellow"></div>
-                <div class="terminal-dot green"></div>
-                <div class="terminal-title">Footorrent — bash</div>
-            </div>
-            <div class="terminal-body">
-                <div><span class="t-prompt">→</span> <span class="t-cmd">ftc gui</span></div>
-                <div><span class="t-out">ftc web ui -&gt; http://127.0.0.1:51234</span></div>
-                <div><span class="t-out">downloads -&gt; /Users/you/Downloads</span></div>
-                <div class="t-out">&nbsp;</div>
-                <div><span class="t-prompt">→</span> <span class="t-cmd">ftc kali-linux-2026.1-installer-arm64.iso.torrent -o ./downloads</span></div>
-                <div class="t-out">&nbsp;</div>
-                <div><span class="t-out"> Name    </span><span class="t-cmd">kali-linux-2026.1-installer-arm64.iso</span></div>
-                <div><span class="t-out"> Size    </span><span class="t-cmd">3967.46 MB</span></div>
-                <div><span class="t-out"> Pieces  </span><span class="t-cmd">15135 &times; 256 KiB</span></div>
-                <div class="t-out">&nbsp;</div>
-                <div><span class="t-out"> Resuming — </span><span class="t-green">412/15135 pieces verified</span></div>
-                <div><span class="t-out"> Announcing to 1 UDP + 3 HTTP tracker(s)</span></div>
-                <div><span class="t-cyan"> Peers found: 50 — connecting to 6</span></div>
-                <div class="t-out">&nbsp;</div>
-                <div><span class="t-cmd">[██████████░░░░░░░░░░░░░░░░░░]  47%  9/19  1.8 MiB/s  4 peers</span></div>
-                <div><span class="t-out">&nbsp;</span></div>
-                <div><span class="t-green"> Done — 15135/15135 pieces verified, seeding for 300s</span></div>
-            </div>
+        <!-- Real terminal capture -->
+        <div class="terminal-capture">
+            <div class="section-label">// at your prompt</div>
+            <h3 class="terminal-capture-title">The window, in text</h3>
+            <p class="terminal-capture-copy">The CLI paints one bar and repaints it in place — same blues, same
+                numbers, same engine counters the table reads. Captured here from a real run: 120 MB over loopback,
+                capped at 6 MB/s, so the clock on it is honest.</p>
+            <div class="terminal-cmd"><span class="t-prompt">→</span> ftc ubuntu-24.04.3-desktop-amd64.iso -o
+                ./downloads --limit 6M</div>
+            <img class="terminal-shot" src="assets/demo/terminal-download.gif" width="1960" height="480"
+                loading="lazy"
+                alt="A real capture: the bar filling blue at 5.8 MB/s with an eta of 10s and 6 peers, then turning green with a checkmark and the text 'done · 120 MB'." />
+            <p class="terminal-capture-note">Blue while it runs, green when the pieces verify, red when it gives
+                up. There is no amber here: the CLI has no pause. Piped, or with <code>NO_COLOR</code> set, the
+                same counters print as plain lines that never repaint.</p>
         </div>
     </section>
 
@@ -1370,8 +1413,8 @@ sha256sum -c SHA256SUMS --ignore-missing</div>
     <footer>
         <div class="footer-logo"><b>foot</b>orrent</div>
         <ul class="footer-links">
+            <li><a href="./release-3.6.0.html">3.6.0 release notes</a></li>
             <li><a href="./release-3.5.0.html">3.5.0 release post</a></li>
-            <li><a href="./release-3.6.0.html">3.6.0 notes (in main)</a></li>
             <li><a href="https://github.com/cyberd4ch/footorrent" target="_blank" rel="noopener">GitHub</a></li>
             <li><a href="https://github.com/cyberd4ch/footorrent/releases" target="_blank"
                     rel="noopener">Releases</a></li>

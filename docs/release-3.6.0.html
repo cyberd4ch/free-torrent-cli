@@ -5,11 +5,11 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description"
-        content="Notes for Footorrent 3.6.0, unreleased on main: a repainting terminal progress bar, movable ports, a seeder that serves metadata, honest installer verification, and a single-seed throughput fix." />
-    <meta property="og:title" content="Footorrent 3.6.0 notes — a bar, a port, and a minute back" />
+        content="Footorrent 3.6.0: a repainting terminal progress bar, movable ports, a seeder that serves metadata, honest installer verification, and a single-seed throughput fix." />
+    <meta property="og:title" content="Footorrent 3.6.0 — a bar, a port, and a minute back" />
     <meta property="og:description"
-        content="What is on main for 3.6.0: the CLI progress bar, --port and --swarm-port, seeding metadata, installer verification lines, and piece workers that hold one connection." />
-    <title>Footorrent 3.6.0 notes — a bar, a port, and a minute back</title>
+        content="What 3.6.0 adds: the CLI progress bar, --port and --swarm-port, seeding metadata, installer verification lines, and piece workers that hold one connection." />
+    <title>Footorrent 3.6.0 — a bar, a port, and a minute back</title>
     <meta name="theme-color" content="#f7f2e8" />
     <link rel="icon" type="image/svg+xml" href="assets/brand/footorrent-mark.svg" />
     <style>
@@ -226,36 +226,33 @@
     <div class="wrap">
         <a class="back" href="./index.html">← footorrent</a>
 
-        <p class="kicker">Release notes · 3.6.0 · unreleased</p>
+        <p class="kicker">Release 3.6.0</p>
         <h1>A bar, a port, and a minute back</h1>
         <p class="lede">Nothing here is a new idea. It is the work that turns a downloader you tolerate into one you
             can leave running: a terminal that shows what is happening, ports that move when they have to, a
             seeder that answers the same questions it asks, and a stalled single-seed transfer that no longer
             takes a minute to give up.</p>
-        <p class="meta">in <code>main</code> · dach-a · Rust, no runtime · ~3 MB binary</p>
+        <p class="meta">2026-11-10 · dach-a · Rust, no runtime · ~3 MB binary</p>
 
-        <div class="callout">
-            <p><strong>Not tagged yet.</strong> This page tracks the <code>Unreleased</code> section of the
-                changelog. The download buttons on the <a href="./index.html#download">front page</a> still serve
-                <strong>3.5.0</strong>, the last release; building from source is the only way to run these
-                changes today.</p>
-        </div>
-
-        <h2>What is on main</h2>
+        <h2>What changed</h2>
 
         <h3>A progress bar worth watching</h3>
         <p>The CLI draws one bar and repaints it in place instead of printing a line per update: a gradient fill
             in the same blues as the window, a green set once the piece count settles, a braille spinner, the
             aggregate rate, ETA and peer count. It is not a separate source of truth — it reads the same engine
-            counters the GUI does, which is why paused is amber, done is green and failure is red in both.</p>
-        <p>When the output is not a terminal, when <code>NO_COLOR</code> is set, or on a Windows host without ANSI
-            support, it falls back to plain text that never repaints. Piping <code>ftc</code> into a file stays
-            readable.</p>
+            counters the GUI does, so the rate on it is the rate in the table.</p>
+        <p>It has three states, not the window's five: blue while it runs, green with a checkmark when the pieces
+            verify, red with a cross when the job gives up. There is no amber because the CLI has no pause.</p>
+        <p>When the output is not a terminal, when <code>NO_COLOR</code> or <code>TERM=dumb</code> is set, or on a
+            Windows host without ANSI support, it falls back to plain text that never repaints. Piping
+            <code>ftc</code> into a file stays readable.</p>
 
         <h3>Ports you can move</h3>
-        <p><code>--port &lt;n&gt;</code> sets the announce and listen port for a download, and
-            <code>--swarm-port &lt;n&gt;</code> does the same for <code>ftc serve</code>. Two clients on one
-            machine, or a network that throttles 6881, no longer means one of them quietly does nothing.</p>
+        <p><code>--port &lt;n&gt;</code> picks the port a download announces from — and the one the seeder
+            listens on when the same run continues with <code>--seed</code>. <code>--swarm-port &lt;n&gt;</code>
+            does the same for downloads started from <code>ftc serve</code>, which keeps its own http port
+            separate. Two clients on one machine, or a network that throttles 6881, no longer means one of them
+            quietly does nothing.</p>
 
         <h3>The seeder answers magnets</h3>
         <p>Metadata exchange used to be a receiver-only feature: the client asked peers for the <code>info</code>
@@ -271,8 +268,8 @@
             collapsed into one surviving trickle and the job ended with “pieces still missing after retries”.</p>
         <p>Workers now hold <strong>one negotiated connection across many pieces</strong>. When the swarm goes
             quiet they park and refill through tracker bursts, with a minimum gap so hungry workers do not
-            stampede the tracker. SHA-1 verification moved into the block fetch, so a corrupt peer is disconnected
-            before its bytes reach disk rather than after.</p>
+            stampede the tracker. A piece is hashed before the fetch returns it, so a peer that serves damage is
+            disconnected before anything reaches disk.</p>
 
         <div class="callout">
             <p><strong>Measured on the same 120 MB torrent from a single seed.</strong> Before: 52 s, then
@@ -306,19 +303,18 @@
             real captures in <code>assets/demo/</code> instead of mockups — and the site you are reading now shares
             the window's palette token for token.</p>
 
-        <h2>What 3.6.0 will not fix</h2>
+        <h2>What 3.6.0 does not fix</h2>
         <p>A dead swarm stays dead, and a magnet with a truncated info hash still has nothing to query. Metadata
             exchange is served by seeds, not by every peer in a swarm: a client that only leeches will not describe
             a torrent to anyone else.</p>
         <p>The terminal bar is a renderer, not a scheduler — if the underlying transfer stalls, the bar will show
             a stall accurately rather than invent movement.</p>
 
-        <h2>Until it ships</h2>
-        <p>Build it from <code>main</code> with the
-            <a href="https://github.com/cyberd4ch/footorrent#build-from-source">README instructions</a>, or stay on
-            <a href="https://github.com/cyberd4ch/footorrent/releases">3.5.0</a>. The authoritative list of changes
-            is the <a href="https://github.com/cyberd4ch/footorrent/blob/main/CHANGELOG.md">changelog</a>; this page
-            is the longer version of its <code>Unreleased</code> section and will get a date when the tag does.</p>
+        <h2>Upgrade</h2>
+        <p>Prebuilt binaries for macOS, Linux and Windows are on the
+            <a href="https://github.com/cyberd4ch/footorrent/releases">releases page</a> under <code>v3.6.0</code>;
+            the CLI, web UI and macOS window all come from the same binary. The authoritative list of changes is in
+            the <a href="https://github.com/cyberd4ch/footorrent/blob/main/CHANGELOG.md">changelog</a>.</p>
 
         <footer>
             Footorrent — small footprint, big downloads. Written in Rust; no libtorrent, no Electron, no telemetry.

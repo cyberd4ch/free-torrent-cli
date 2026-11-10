@@ -17,12 +17,13 @@ push to `main`.
 2. Close the changelog section: change `## [Unreleased]` to
    `## [X.Y.Z] - YYYY-MM-DD`, and leave a fresh empty `## [Unreleased]` above
    it for the next cycle.
-3. Date the post: in `docs/release-X.Y.Z.html`, drop the "Not tagged yet"
-   callout, change the kicker from `unreleased` to the release date, and update
-   the `· in main` part of the meta line.
+3. Date the post: in `docs/release-X.Y.Z.html`, set the kicker to
+   `Release X.Y.Z` and the meta line to `YYYY-MM-DD · dach-a · ...`, and delete
+   any "not tagged yet" callout left from the draft.
 4. Move the site onto the new version: the hero badge and `platform-version`
    lines in `docs/index.html`, plus the nav and footer links (keep the previous
-   post linked — old notes are not deleted).
+   post linked — old notes are not deleted). Delete the tag-pending sentence
+   under the download buttons: once the tag exists, that caveat is false.
 5. Point readers at the newest notes: `README.md`'s site line, and the footer
    entry on `docs/index.html`.
 6. Green gate, same as CI: `cargo test --all`,

@@ -27,7 +27,7 @@ counters, so the two can never disagree.
 **[cyberd4ch.github.io/footorrent](https://cyberd4ch.github.io/footorrent/)** —
 the site: real captures of the window, the state-by-state gallery, and the
 release notes ([3.5.0](https://cyberd4ch.github.io/footorrent/release-3.5.0.html),
-[3.6.0, in main](https://cyberd4ch.github.io/footorrent/release-3.6.0.html)).
+[3.6.0](https://cyberd4ch.github.io/footorrent/release-3.6.0.html)).
 
 ---
 

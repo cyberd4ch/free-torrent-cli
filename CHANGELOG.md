@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+_No changes yet._
+
+## [3.6.0] - 2026-11-10
+
 ### Added
 
 - **A progress bar worth watching.** The CLI now renders one graphic bar that
