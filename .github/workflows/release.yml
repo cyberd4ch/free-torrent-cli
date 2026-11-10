@@ -103,7 +103,9 @@ jobs:
             "stage/ftc-gui-arm64" "stage/ftc-gui-x86_64"
           rm -f "stage/ftc-gui-arm64" "stage/ftc-gui-x86_64"
           # Fail the build here rather than ship a bundle that only half works.
-          lipo -archs "$app/Contents/MacOS/ftc" "$app/Contents/MacOS/ftc-gui"
+          # One file per call: `lipo -archs` rejects a second input.
+          lipo -archs "$app/Contents/MacOS/ftc"
+          lipo -archs "$app/Contents/MacOS/ftc-gui"
           cat > "$app/Contents/Info.plist" <<PLIST
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
