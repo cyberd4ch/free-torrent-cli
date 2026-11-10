@@ -830,6 +830,10 @@
             margin-top: 46px;
         }
 
+        .terminal-capture-sub {
+            margin-top: 34px;
+        }
+
         .terminal-capture-title {
             font-size: 20px;
             font-weight: 600;
@@ -1203,9 +1207,6 @@
                 href="https://github.com/cyberd4ch/footorrent/releases/latest/download/SHA256SUMS">SHA256SUMS</a>
             — verify before running:<br />
             <code>curl -LO …/releases/latest/download/SHA256SUMS &amp;&amp; shasum -a 256 -c SHA256SUMS --ignore-missing</code>
-            <br /><br />
-            The 3.6.0 archives are built by the <code>v3.6.0</code> tag. If these buttons still hand you 3.5.0,
-            the tag has not been pushed yet — build from <code>main</code> in the meantime.
         </div>
     </section>
 
@@ -1406,6 +1407,17 @@ sha256sum -c SHA256SUMS --ignore-missing</div>
             <p class="terminal-capture-note">Blue while it runs, green when the pieces verify, red when it gives
                 up. There is no amber here: the CLI has no pause. Piped, or with <code>NO_COLOR</code> set, the
                 same counters print as plain lines that never repaint.</p>
+
+            <div class="terminal-capture-sub">
+                <div class="terminal-cmd"><span class="t-prompt">→</span> ftc "magnet:?xt=urn:btih:ab40790a…" -o
+                    ./downloads</div>
+                <img class="terminal-shot" src="assets/demo/terminal-metadata.gif" width="1960" height="500"
+                    loading="lazy"
+                    alt="A real capture of a magnet lookup: the bar empty and the spinner turning while the status reads '1 trackers, fetching metadata', the peer count climbing from 0 to 5." />
+                <p class="terminal-capture-note">A bare magnet: the bar stays empty until the <code>info</code>
+                    dictionary has arrived and verified, and the peer count only moves when the swarm answers. No
+                    bytes are written in this phase.</p>
+            </div>
         </div>
     </section>
 

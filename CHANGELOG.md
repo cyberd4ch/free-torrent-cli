@@ -16,12 +16,15 @@ _No changes yet._
 - **A progress bar worth watching.** The CLI now renders one graphic bar that
   repaints in place: a gradient fill in the same blues the GUI uses, a green
   set when the piece count settles, a braille spinner, live aggregate rate,
-  ETA and peer count. It mirrors the GUI's own states — amber while, green
-  done, red failure — because it renders from the same engines' counters. It
+  ETA and peer count. It renders from the same engine counters as the GUI, in
+  three of its states — blue while running, green done, red failure. There is
+  no amber because the CLI has no pause. It
   stays plain text (and never repaints) when the output is not a terminal,
   when `NO_COLOR` is set, or a Windows host without ANSI support.
-- **Port control where it matters.** `--port <n>` on downloads (announce and
-  accept) and `--swarm-port <n>` on `ftc serve`, so crowded networks and
+- **Port control where it matters.** `--port <n>` sets the announce port for a
+  download, and the port the seeder listens on when it continues with
+  `--seed`; `--swarm-port <n>` does the same for downloads started from
+  `ftc serve`, which keeps its http port separate. Crowded networks and
   multiple concurrent clients stop colliding on 6881.
 - **The seeder answers magnets.** A seeding process now speaks the metadata
   exchange it consumes: on receiving an extension handshake it announces
