@@ -17,10 +17,7 @@ case "$OS-$ARCH" in
   Darwin-arm64)  ASSET=ftc-macos-arm64.tar.gz ;;
   Darwin-x86_64) ASSET=ftc-macos-x86_64.tar.gz ;;
   Linux-x86_64)  ASSET=ftc-linux-x86_64.tar.gz ;;
-  Linux-aarch64 | Linux-arm64)
-    echo "ftc: no Linux arm64 build yet — build one with: cargo build --release" >&2
-    exit 1
-    ;;
+  Linux-aarch64 | Linux-arm64) ASSET=ftc-linux-arm64.tar.gz ;;
   *)
     echo "ftc: unsupported platform $OS/$ARCH" >&2
     exit 1
@@ -52,7 +49,14 @@ fetch() {
 }
 
 echo "-> $ASSET"
-fetch "$URL/$ASSET" "$tmp/$ASSET"
+if ! fetch "$URL/$ASSET" "$tmp/$ASSET"; then
+  if [ "$ASSET" = ftc-linux-arm64.tar.gz ]; then
+    echo "ftc: this release has no Linux arm64 archive — build one with: cargo build --release" >&2
+  else
+    echo "ftc: cannot download $URL/$ASSET" >&2
+  fi
+  exit 1
+fi
 
 if [ "${FTC_NO_VERIFY:-0}" != "1" ]; then
   if command -v shasum >/dev/null 2>&1; then
@@ -115,13 +119,21 @@ if [ "$OS" = Darwin ]; then
   app="$apps/Footorrent.app"
   mkdir -p "$apps"
   # The real app bundle: a WKWebView window compiled in CI, so double-clicking
-  # gives a window rather than a browser tab. It is built for Apple silicon
-  # only, and an arm64 bundle on an Intel Mac does not launch — so fall through
-  # to the launcher there instead of installing something that cannot start.
-  if [ "$ARCH" = arm64 ] &&
-     fetch "$URL/ftc-macos-app.zip" "$tmp/ftc-app.zip" 2>/dev/null &&
+  # gives a window rather than a browser tab. It is universal since 3.7; older
+  # releases shipped it arm64-only, and an arm64 bundle on an Intel Mac cannot
+  # start — so read the binary's architectures instead of trusting the release.
+  use_bundle=0
+  if fetch "$URL/ftc-macos-app.zip" "$tmp/ftc-app.zip" 2>/dev/null &&
      unzip -q -o "$tmp/ftc-app.zip" -d "$apps" >/dev/null 2>&1 &&
-     [ -d "$app" ]; then
+     [ -x "$app/Contents/MacOS/ftc-gui" ]; then
+    bundle_archs=$(lipo -archs "$app/Contents/MacOS/ftc-gui" 2>/dev/null || echo "")
+    # An empty reading means no lipo on this machine; the bundle is then given
+    # the benefit of the doubt, which is what every release before 3.7 did.
+    if [ -z "$bundle_archs" ] || printf '%s\n' "$bundle_archs" | grep -qw "$ARCH"; then
+      use_bundle=1
+    fi
+  fi
+  if [ "$use_bundle" = 1 ]; then
     xattr -dr com.apple.quarantine "$app" 2>/dev/null || true
     echo "-> installed $app (double-click for the app window)"
   else

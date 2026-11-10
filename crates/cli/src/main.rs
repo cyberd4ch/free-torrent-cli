@@ -31,6 +31,9 @@ SUBCOMMANDS:
     swarm <magnet|file>   report tracker, DHT and reachable peer counts
     serve                 run the web ui on http://127.0.0.1:8080
     gui                   start the web ui and open it in your browser
+
+While a download runs in a terminal, type p and press Enter to pause it — the
+bar turns amber — and the same again to resume. Verified pieces stay on disk.
 ";
 
 const SWARM_USAGE: &str = "\
@@ -243,12 +246,19 @@ fn run() -> Result<(), String> {
     let (session, progress) =
         Session::open(torrent, &output, options).map_err(|err| err.to_string())?;
 
+    let paused = session.pause_handle();
+    let pause_listener = spawn_pause_listener(paused.clone());
+    if pause_listener.is_some() {
+        println!("press p + Enter to pause, p + Enter again to resume");
+    }
+
     let stop = Arc::new(AtomicBool::new(false));
     let final_state = Arc::new(AtomicU8::new(0));
     let reporter = {
         let stop = stop.clone();
         let state = final_state.clone();
         let progress = progress.clone();
+        let paused = paused.clone();
         std::thread::spawn(move || {
             let mut tick = 0;
             while !stop.load(Ordering::Relaxed) {
@@ -256,7 +266,10 @@ fn run() -> Result<(), String> {
                 print_progress(
                     &snapshot,
                     progress.bytes_per_second(),
-                    bar_state(state.load(Ordering::Relaxed)),
+                    bar_state_with_pause(
+                        bar_state(state.load(Ordering::Relaxed)),
+                        paused.load(Ordering::Relaxed),
+                    ),
                     tick,
                 );
                 tick += 1;
@@ -540,6 +553,8 @@ const BAR_WIDTH: usize = 30;
 // red; the track dots; the dim separators.
 const BLUE_L: (u8, u8, u8) = (0x4c, 0x86, 0xbc);
 const BLUE_D: (u8, u8, u8) = (0x2f, 0x6f, 0xa8);
+const AMBER_L: (u8, u8, u8) = (0xc4, 0x8f, 0x36);
+const AMBER_D: (u8, u8, u8) = (0xa5, 0x74, 0x1c);
 const GREEN_D: (u8, u8, u8) = (0x2e, 0x7d, 0x5b);
 const GREEN_L: (u8, u8, u8) = (0x4f, 0xa3, 0x7c);
 const RED_D: (u8, u8, u8) = (0x9c, 0x4a, 0x42);
@@ -568,9 +583,10 @@ fn colors_enabled() -> bool {
             || std::env::var("ConEmuANSI").is_ok_and(|v| v == "ON"))
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum BarState {
     Active,
+    Paused,
     Done,
     Failed,
 }
@@ -580,6 +596,15 @@ fn bar_state(raw: u8) -> BarState {
         1 => BarState::Done,
         2 => BarState::Failed,
         _ => BarState::Active,
+    }
+}
+
+/// A paused flag only ever softens a running bar: a finished or failed job keeps
+/// its own state, because there is nothing left to park.
+fn bar_state_with_pause(state: BarState, paused: bool) -> BarState {
+    match (state, paused) {
+        (BarState::Active, true) => BarState::Paused,
+        _ => state,
     }
 }
 
@@ -640,6 +665,7 @@ fn print_progress(snapshot: &Snapshot, speed: f64, state: BarState, tick: usize)
     let percent = if finished { 100 } else { percent_of(snapshot) };
     let (left, right, marker, label) = match state {
         BarState::Active => (BLUE_L, BLUE_D, SPINNER[tick % SPINNER.len()], ""),
+        BarState::Paused => (AMBER_L, AMBER_D, "\u{2016}", "paused"),
         BarState::Done => (GREEN_D, GREEN_L, "\u{2713}", "done"),
         BarState::Failed => (RED_D, RED_L, "\u{2715}", "failed"),
     };
@@ -705,6 +731,12 @@ fn print_progress(snapshot: &Snapshot, speed: f64, state: BarState, tick: usize)
                 snapshot.active_peers
             )
         }
+        BarState::Paused => format!(
+            " · {} · {} / {}",
+            label,
+            fmt_bytes(snapshot.downloaded as f64),
+            fmt_bytes(snapshot.total as f64)
+        ),
         BarState::Done => format!(" · {} · {}", label, fmt_bytes(snapshot.total as f64)),
         BarState::Failed => format!(" · {}", label),
     };
@@ -724,6 +756,35 @@ fn print_progress(snapshot: &Snapshot, speed: f64, state: BarState, tick: usize)
 
     print!("\r{line}\x1b[0K");
     let _ = std::io::stdout().flush();
+}
+
+/// Type `p` and press Enter to pause a running download, and again to resume.
+///
+/// Line-based on purpose: raw mode would mean termios (and a dependency) to
+/// catch a single keypress, and the engine parks workers between blocks, so a
+/// whole line of latency costs nothing. Returns `None` when there is no
+/// terminal to type into, which is also every CI run.
+fn spawn_pause_listener(pause: Arc<AtomicBool>) -> Option<std::thread::JoinHandle<()>> {
+    use std::io::{BufRead, IsTerminal};
+    if !std::io::stdin().is_terminal() || !std::io::stdout().is_terminal() {
+        return None;
+    }
+    Some(std::thread::spawn(move || {
+        let stdin = std::io::stdin();
+        let mut line = String::new();
+        loop {
+            line.clear();
+            match stdin.lock().read_line(&mut line) {
+                Ok(0) | Err(_) => break,
+                Ok(_) => {}
+            }
+            let command = line.trim();
+            if command.eq_ignore_ascii_case("p") || command.eq_ignore_ascii_case("pause") {
+                let paused = !pause.load(Ordering::Relaxed);
+                pause.store(paused, Ordering::Relaxed);
+            }
+        }
+    }))
 }
 
 // indeterminate metadata bar: a 40%-wide blue window sweeps the track, the
@@ -757,4 +818,27 @@ fn print_metadata_sweep(tick: usize) {
     line += " · fetching metadata\x1b[0m";
     print!("\r{line}\x1b[0K");
     let _ = std::io::stdout().flush();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn pause_only_overrides_a_running_bar() {
+        assert_eq!(
+            bar_state_with_pause(BarState::Active, true),
+            BarState::Paused
+        );
+        assert_eq!(
+            bar_state_with_pause(BarState::Active, false),
+            BarState::Active
+        );
+        // Nothing is left to park once a job is finished or has given up.
+        assert_eq!(bar_state_with_pause(BarState::Done, true), BarState::Done);
+        assert_eq!(
+            bar_state_with_pause(BarState::Failed, true),
+            BarState::Failed
+        );
+    }
 }

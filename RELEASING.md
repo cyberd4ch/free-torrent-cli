@@ -40,8 +40,10 @@ git push origin vX.Y.Z
 ## After the tag
 
 - Watch the `release` workflow. It must produce `ftc-linux-x86_64.tar.gz`,
-  `ftc-macos-arm64.tar.gz`, `ftc-macos-x86_64.tar.gz`, `ftc-windows-x86_64.zip`,
-  `ftc-macos-app.zip` and `SHA256SUMS`.
+  `ftc-linux-arm64.tar.gz`, `ftc-macos-arm64.tar.gz`, `ftc-macos-x86_64.tar.gz`,
+  `ftc-windows-x86_64.zip`, `ftc-macos-app.zip` and `SHA256SUMS`.
+- Confirm the macOS bundle is universal: `lipo -archs
+  Footorrent.app/Contents/MacOS/ftc-gui` should list `x86_64 arm64`.
 - Install once from the published artifacts, not from a local build:
   `curl -fsSL https://raw.githubusercontent.com/cyberd4ch/footorrent/main/install.sh | sh`.
   The digest line must read `-> sha256 ok`. Any `-> sha256 SKIPPED — …` line

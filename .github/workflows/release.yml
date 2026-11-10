@@ -16,6 +16,9 @@ jobs:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             name: linux-x86_64
+          - os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+            name: linux-arm64
           - os: macos-latest
             target: aarch64-apple-darwin
             name: macos-arm64
@@ -70,23 +73,37 @@ jobs:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
         with:
-          targets: aarch64-apple-darwin
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
       - uses: Swatinem/rust-cache@v2
-      - name: Build the engine
-        run: cargo build --release --target aarch64-apple-darwin -p free-torrent-cli
+      - name: Build the engine for both architectures
+        run: |
+          cargo build --release --target aarch64-apple-darwin -p free-torrent-cli
+          cargo build --release --target x86_64-apple-darwin -p free-torrent-cli
+      # One universal bundle, not one per architecture: an arm64-only app on an
+      # Intel Mac cannot launch, and install.sh would have to guess which zip a
+      # machine can run.
       - name: Compile the window
         run: |
           set -euo pipefail
           version="${GITHUB_REF_NAME#v}"
           app="stage/Footorrent.app"
           mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
-          cp "target/aarch64-apple-darwin/release/ftc" "$app/Contents/MacOS/ftc"
+          lipo -create -output "$app/Contents/MacOS/ftc" \
+            target/aarch64-apple-darwin/release/ftc \
+            target/x86_64-apple-darwin/release/ftc
           chmod 755 "$app/Contents/MacOS/ftc"
           # Built from assets/brand/icon-1024.svg; without it the dock shows a
           # generic app icon.
           cp assets/brand/AppIcon.icns "$app/Contents/Resources/AppIcon.icns"
-          swiftc -O gui/macos/main.swift -o "$app/Contents/MacOS/ftc-gui" \
-            -framework AppKit -framework WebKit
+          swiftc -O gui/macos/main.swift -target arm64-apple-macos11 \
+            -o "stage/ftc-gui-arm64" -framework AppKit -framework WebKit
+          swiftc -O gui/macos/main.swift -target x86_64-apple-macos11 \
+            -o "stage/ftc-gui-x86_64" -framework AppKit -framework WebKit
+          lipo -create -output "$app/Contents/MacOS/ftc-gui" \
+            "stage/ftc-gui-arm64" "stage/ftc-gui-x86_64"
+          rm -f "stage/ftc-gui-arm64" "stage/ftc-gui-x86_64"
+          # Fail the build here rather than ship a bundle that only half works.
+          lipo -archs "$app/Contents/MacOS/ftc" "$app/Contents/MacOS/ftc-gui"
           cat > "$app/Contents/Info.plist" <<PLIST
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">

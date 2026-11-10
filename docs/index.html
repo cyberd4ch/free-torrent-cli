@@ -1057,7 +1057,7 @@
             </div>
             <div class="hero-stat-divider"></div>
             <div>
-                <div class="hero-stat-value">64</div>
+                <div class="hero-stat-value">65</div>
                 <div class="hero-stat-label">TESTS PASSING</div>
             </div>
             <div class="hero-stat-divider"></div>
@@ -1405,8 +1405,9 @@ sha256sum -c SHA256SUMS --ignore-missing</div>
                 loading="lazy"
                 alt="A real capture: the bar filling blue at 5.8 MB/s with an eta of 10s and 6 peers, then turning green with a checkmark and the text 'done · 120 MB'." />
             <p class="terminal-capture-note">Blue while it runs, green when the pieces verify, red when it gives
-                up. There is no amber here: the CLI has no pause. Piped, or with <code>NO_COLOR</code> set, the
-                same counters print as plain lines that never repaint.</p>
+                up — and, with the next tag, amber if you type <code>p</code> + Enter to pause, the same keys to
+                resume. Piped, or with <code>NO_COLOR</code> set, the same counters print as plain lines that never
+                repaint.</p>
 
             <div class="terminal-capture-sub">
                 <div class="terminal-cmd"><span class="t-prompt">→</span> ftc "magnet:?xt=urn:btih:ab40790a…" -o

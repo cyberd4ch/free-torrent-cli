@@ -147,6 +147,10 @@ Expand-Archive ftc-windows-x86_64.zip -DestinationPath .
 .\ftc.exe --version
 ```
 
+Linux arm64 (`ftc-linux-arm64.tar.gz`, `aarch64-unknown-linux-gnu`) is built by
+the same workflow and ships with the next release; `install.sh` already selects
+it on an `aarch64`/`arm64` machine.
+
 Every release also ships [`SHA256SUMS`](https://github.com/cyberd4ch/footorrent/releases/latest/download/SHA256SUMS).
 Verify before you run it:
 
@@ -186,6 +190,11 @@ own aggregated rate, the same number the GUI table shows:
 
 Redirect the output, or set `NO_COLOR`, and the same counters print as plain
 lines that never repaint — a log file stays readable.
+
+With a terminal attached, type **`p` and press Enter** to pause: the bar turns
+amber, the workers park between blocks and the stats become
+`paused · 12 MB / 120 MB`. Type `p` again to resume. Verified pieces are never
+downloaded twice, so a pause costs nothing but time.
 
 A magnet with no tracker still works: it hunts peers through the DHT, fetches
 the `info` dictionary from them (BEP 9/10), and verifies it against the info
@@ -310,7 +319,7 @@ cargo clippy --all-targets -- -D warnings
 cargo fmt --all -- --check
 ```
 
-64 tests — 42 in the engine, 22 in the CLI. The suite is end-to-end where it
+65 tests — 42 in the engine, 23 in the CLI. The suite is end-to-end where it
 matters: a fake peer serves a real torrent and the session downloads, verifies
 and writes it; a fake router → holder chain over UDP exercises a full DHT hunt
 and a token-validated announce; a fake leecher pulls one block from the seeder
@@ -340,23 +349,16 @@ have.
 
 ### 3.7
 
-- **A macOS app for Intel Macs.** `ftc-macos-app.zip` is an arm64 bundle, so
-  `install.sh` gives Intel Macs a browser launcher rather than an app that
-  cannot start. The fix is a second bundle, or one universal build, in
-  `release.yml`.
-- **A signed, notarized bundle.** The app is ad-hoc signed (`codesign --sign -`),
-  so a browser download meets Gatekeeper. A Developer ID is what removes that
-  dialog without asking anyone to bypass it.
-- **Linux arm64 archives.** `install.sh` answers `Linux/aarch64` with "no Linux
-  arm64 build yet"; no `aarch64-unknown-linux-gnu` target exists in the release
-  matrix.
+- **A signed, notarized bundle.** The app is universal now but still ad-hoc
+  signed (`codesign --sign -`), so a browser download meets Gatekeeper. A
+  Developer ID is what removes that dialog without asking anyone to bypass it.
 - **A Windows window.** A native front end on the same local JSON API the macOS
   app already speaks.
 
-### Later
+### Next release after that
 
-- **Pause from the command line.** The terminal bar has three states because the
-  CLI has no pause; pausing a job is a window-only action today.
+Universal macOS bundle, Linux arm64 archives and `p` + Enter to pause are on
+`main` and land in the next tag.
 
 ## License
 

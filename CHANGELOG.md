@@ -7,7 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-_No changes yet._
+### Added
+
+- **Pause from the terminal.** Typing `p` and Enter during a download parks the
+  workers between blocks, turns the bar amber and reports `paused · 12 MB /
+  120 MB`; the same keys resume, and verified pieces are never redone. The
+  engine already had the pause gate (`Session::pause_handle`), so this is the
+  CLI catching up with the window. Only offered when stdin and stdout are
+  terminals, and nothing is read when output is piped.
+- **Linux arm64 archives.** `ftc-linux-arm64.tar.gz` is built on an arm64
+  runner, and `install.sh` selects it on `aarch64`/`arm64` instead of refusing
+  the machine. Older releases say so in one line rather than failing on a 404.
+
+### Changed
+
+- **One universal macOS app.** `ftc-macos-app.zip` now carries arm64 and x86_64
+  slices of both the engine and the window, lipo'd together in the release
+  workflow, so an Intel Mac no longer installs a bundle it cannot launch.
+  `install.sh` checks the bundle's architectures before using it.
 
 ## [3.6.0] - 2026-11-10
 
