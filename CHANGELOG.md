@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+_No changes yet._
+
+## [3.7.0] - 2026-11-10
+
 ### Added
 
 - **Pause from the terminal.** Typing `p` and Enter during a download parks the

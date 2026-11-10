@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description"
+        content="Footorrent 3.7.0: one universal macOS app, Linux arm64 archives, pause from the terminal, and an installer that CI actually runs." />
+    <meta property="og:title" content="Footorrent 3.7.0 — one app, two architectures, and a pause key" />
+    <meta property="og:description"
+        content="What 3.7.0 adds: a lipo'd universal macOS bundle, ftc-linux-arm64, p + Enter to pause, and an install-smoke workflow that runs the installer on both architectures." />
+    <title>Footorrent 3.7.0 — one app, two architectures, and a pause key</title>
+    <meta name="theme-color" content="#f7f2e8" />
+    <link rel="icon" type="image/svg+xml" href="assets/brand/footorrent-mark.svg" />
+    <style>
+        *,
+        *::before,
+        *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        /* ── Tokens ───────────────────────────────────────────────────────────────
+           Taken from the download manager window (crates/cli/src/ui.html), the page
+           the macOS app shows in its WKWebView. Change them there first. */
+        :root {
+            --bg: #f7f2e8;
+            --panel: #fbf7ee;
+            --panel-2: #f0e9db;
+            --panel-3: #e8dfce;
+            --field: #fffdf7;
+            --line: #e3d9c6;
+            --line-2: #d2c5ae;
+            --text: #1c2a3a;
+            --muted: #5b6b7d;
+            --dim: #8492a0;
+            --accent: #2f6fa8;
+            --accent-2: #5b93c7;
+            --ok: #2e7d5b;
+            --warn: #a5741c;
+            --err: #b4473f;
+            --info: #3c74a8;
+            --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, system-ui, sans-serif;
+            --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+        }
+
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: var(--sans);
+            font-size: 16px;
+            line-height: 1.7;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        a {
+            color: var(--accent);
+            text-decoration: none;
+            text-underline-offset: 2px;
+        }
+
+        a:hover {
+            text-decoration: underline;
+        }
+
+        code {
+            font-family: var(--mono);
+            font-size: .88em;
+            color: #2a5f8f;
+            background: var(--panel-2);
+            border-radius: 4px;
+            padding: 1px 5px;
+        }
+
+        .wrap {
+            max-width: 780px;
+            margin: 0 auto;
+            padding: 64px 24px 96px;
+        }
+
+        .back {
+            display: inline-flex;
+            align-items: center;
+            padding: 5px 11px;
+            border: 1px solid var(--line-2);
+            border-radius: 999px;
+            background: var(--panel-2);
+            font-family: var(--mono);
+            font-size: 11px;
+            letter-spacing: .05em;
+            text-transform: uppercase;
+            color: var(--muted);
+            transition: background .2s, border-color .2s, color .2s;
+        }
+
+        .back:hover {
+            background: var(--panel-3);
+            border-color: #a9bfd4;
+            color: var(--text);
+            text-decoration: none;
+        }
+
+        .kicker {
+            margin-top: 44px;
+            font-family: var(--mono);
+            font-size: 11px;
+            letter-spacing: .1em;
+            text-transform: uppercase;
+            color: var(--accent);
+        }
+
+        h1 {
+            font-size: clamp(34px, 6vw, 54px);
+            font-weight: 600;
+            line-height: 1.04;
+            letter-spacing: -.035em;
+            color: var(--text);
+            margin: 14px 0 18px;
+        }
+
+        .lede {
+            font-size: 18px;
+            line-height: 1.65;
+            color: var(--muted);
+            margin-bottom: 18px;
+        }
+
+        .meta {
+            font-family: var(--mono);
+            font-size: 11.5px;
+            color: var(--dim);
+            padding-bottom: 28px;
+            border-bottom: 1px solid var(--line);
+        }
+
+        h2 {
+            font-size: 24px;
+            font-weight: 600;
+            letter-spacing: -.02em;
+            color: var(--text);
+            margin: 46px 0 14px;
+        }
+
+        h3 {
+            font-size: 17px;
+            font-weight: 600;
+            color: var(--text);
+            margin: 28px 0 8px;
+        }
+
+        p {
+            margin: 0 0 16px;
+            color: var(--muted);
+        }
+
+        ul,
+        ol {
+            margin: 0 0 18px 20px;
+            color: var(--muted);
+        }
+
+        li {
+            margin-bottom: 8px;
+        }
+
+        strong {
+            color: var(--text);
+            font-weight: 650;
+        }
+
+        .callout {
+            background: var(--panel);
+            border: 1px solid var(--line);
+            border-left: 3px solid var(--accent);
+            border-radius: 10px;
+            padding: 18px 20px;
+            margin: 22px 0;
+        }
+
+        .callout p:last-child {
+            margin-bottom: 0;
+        }
+
+        .numbers {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 12px;
+            margin: 24px 0;
+        }
+
+        .number {
+            background: var(--panel);
+            border: 1px solid var(--line);
+            border-radius: 12px;
+            padding: 14px 16px;
+        }
+
+        .number b {
+            display: block;
+            font-family: var(--mono);
+            font-size: 20px;
+            font-weight: 500;
+            color: var(--accent);
+        }
+
+        .number span {
+            font-family: var(--mono);
+            font-size: 10.5px;
+            color: var(--dim);
+            letter-spacing: .04em;
+        }
+
+        pre {
+            font-family: var(--mono);
+            font-size: 12px;
+            line-height: 1.7;
+            color: var(--text);
+            background: var(--panel-2);
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            padding: 12px 14px;
+            margin: 0 0 18px;
+            overflow-x: auto;
+            white-space: pre;
+        }
+
+        footer {
+            margin-top: 56px;
+            padding-top: 22px;
+            border-top: 1px solid var(--line);
+            font-family: var(--mono);
+            font-size: 11.5px;
+            color: var(--dim);
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <a class="back" href="./index.html">← footorrent</a>
+
+        <p class="kicker">Release 3.7.0</p>
+        <h1>One app, two architectures, and a pause key</h1>
+        <p class="lede">3.6.0 made the client honest about what it was doing. This one is about the machines it runs
+            on: a macOS app that opens on an Intel Mac as readily as on Apple silicon, Linux arm64 archives that
+            finally exist, a terminal that can pause instead of just watching, and CI that installs the result
+            rather than trusting it.</p>
+        <p class="meta">2026-11-10 · dach-a · Rust, no runtime · ~3 MB binary</p>
+
+        <h2>What changed</h2>
+
+        <h3>A universal macOS app</h3>
+        <p>The window shipped as an arm64 bundle, which meant an Intel Mac installed a <code>Footorrent.app</code>
+            that could not start. The release job now builds both architectures of the engine and compiles the
+            Swift window twice, then <code>lipo</code>s each pair into one file — so the zip contains a single app
+            with <code>x86_64</code> and <code>arm64</code> slices, not two zips anyone has to choose between.</p>
+        <p><code>install.sh</code> stopped guessing. It reads the architectures out of the bundle it just unpacked
+            and keeps the app only if the machine has a slice; otherwise it writes the browser launcher and says
+            so. Pinning an older release on an Intel Mac therefore degrades to a working window in the browser,
+            not a silent failure.</p>
+
+        <h3>Linux arm64</h3>
+        <p><code>ftc-linux-arm64.tar.gz</code> is built on an arm64 runner against
+            <code>aarch64-unknown-linux-gnu</code> and joins the release matrix, so the installer no longer has to
+            answer <code>Linux/aarch64</code> with "no build yet". The archive is an ordinary ELF aarch64 binary
+            with the <code>footorrent</code> alias beside it, exactly like the x86_64 one.</p>
+        <p>Older releases do not have that asset. Rather than dying on a 404, the installer prints one line saying
+            the release has no arm64 archive and how to build one.</p>
+
+        <h3>Pause, from the terminal</h3>
+        <p>The engine has had a pause gate since the window got a Pause button; the CLI simply never used it. Now
+            <code>p</code> and Enter flips it. Workers park between blocks, the bar turns amber, and the stats say
+            how much has actually landed:</p>
+        <pre>‖ ███████████▏░░░░░░░░░░░░░░░░░░ · paused · 768 KB / 2.0 MB</pre>
+        <p>That frame is from a real run: a 2 MB torrent served by a local peer, paused a third of the way in,
+            resumed with the same keys, finished. The file that landed hashes identical to the source and no piece
+            was fetched twice. The listener reads whole lines on purpose — raw mode would mean termios and a
+            dependency — and it only exists when stdin and stdout are both terminals, so a piped run never blocks
+            waiting for input.</p>
+
+        <h3>The installer is tested, not assumed</h3>
+        <p>Every push now runs <code>install-smoke</code> on x86_64 and arm64: it builds a real archive, hashes it,
+            points <code>install.sh</code> at it with <code>FTC_BASE_URL</code>, and checks that the right asset was
+            chosen, the digest says <code>sha256 ok</code>, the binary is executable, the alias is a symlink and the
+            architecture matches. Three negative paths are checked in the same job: the opt-out prints
+            <code>sha256 SKIPPED — FTC_NO_VERIFY is set</code>, a release without checksums says
+            <code>sha256 SKIPPED — this release carries no SHA256SUMS</code>, and an unsupported machine is refused
+            by name rather than by a curl error.</p>
+
+        <div class="callout">
+            <p><strong>Measured, not asserted.</strong> Paused at 768 KB of 2.0 MB and resumed to completion: the
+                output file's SHA-1 matched the source exactly. The smoke job installs on both architectures and
+                prints <code>Footorrent 3.7.0 (ftc)</code> from the installed binary, not from the build tree.</p>
+        </div>
+
+        <div class="numbers">
+            <div class="number"><b>768 KB</b><span>landed before the pause</span></div>
+            <div class="number"><b>2</b><span>architectures per macOS binary</span></div>
+            <div class="number"><b>6</b><span>archives per release</span></div>
+            <div class="number"><b>65</b><span>tests in the suite</span></div>
+        </div>
+
+        <h2>What 3.7.0 does not fix</h2>
+        <p>The macOS bundle is still ad-hoc signed (<code>codesign --sign -</code>), so a download straight from the
+            browser meets Gatekeeper. A Developer ID and notarization are the fix, and they need an account this
+            project does not have yet.</p>
+        <p>Pause is line-based: press <code>p</code>, then Enter. Catching a single keypress would need termios and
+            a dependency; the engine parks between blocks, so one line of latency changes nothing.</p>
+        <p>A Windows window is still the missing front end — the engine, the CLI and the web UI all run there
+            today.</p>
+
+        <h2>Upgrade</h2>
+        <p>Prebuilt binaries for macOS (universal app and per-arch archives), Linux (x86_64 and arm64) and Windows
+            are on the <a href="https://github.com/cyberd4ch/footorrent/releases">releases page</a> under
+            <code>v3.7.0</code>. The authoritative list of changes is in the
+            <a href="https://github.com/cyberd4ch/footorrent/blob/main/CHANGELOG.md">changelog</a>.</p>
+
+        <footer>
+            Footorrent — small footprint, big downloads. Written in Rust; no libtorrent, no Electron, no telemetry.
+        </footer>
+    </div>
+</body>
+
+</html>
